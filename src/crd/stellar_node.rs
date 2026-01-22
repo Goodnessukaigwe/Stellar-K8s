@@ -241,7 +241,7 @@ fn validate_ingress(ingress: &IngressConfig) -> Result<(), String> {
 #[serde(rename_all = "camelCase")]
 pub struct StellarNodeStatus {
     /// Current phase of the node lifecycle
-    /// (Pending, Creating, Running, Syncing, Ready, Failed, Terminating)
+    /// (Pending, Creating, Running, Syncing, Ready, Failed, Degraded, Remediating, Terminating)
     pub phase: String,
 
     /// Human-readable message about current state

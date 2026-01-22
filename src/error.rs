@@ -51,6 +51,10 @@ pub enum Error {
     /// HTTP request error (from reqwest)
     #[error("HTTP request error: {0}")]
     HttpError(#[from] reqwest::Error),
+
+    /// Remediation action failed
+    #[error("Remediation failed: {0}")]
+    RemediationError(String),
 }
 
 /// Result type alias for operator operations
@@ -59,7 +63,10 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 impl Error {
     /// Check if this error type should trigger a retry
     pub fn is_retriable(&self) -> bool {
-        matches!(self, Error::KubeError(_) | Error::FinalizerError(_))
+        matches!(
+            self,
+            Error::KubeError(_) | Error::FinalizerError(_) | Error::RemediationError(_)
+        )
     }
 
     /// Convert to a human-readable message for status updates
@@ -74,6 +81,7 @@ impl Error {
                 format!("Archive health check failed: {}", msg)
             }
             Error::HttpError(e) => format!("HTTP request failed: {}", e),
+            Error::RemediationError(msg) => format!("Remediation failed: {}", msg),
             _ => self.to_string(),
         }
     }
