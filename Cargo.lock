@@ -1692,6 +1692,7 @@ dependencies = [
  "futures",
  "k8s-openapi",
  "kube",
+ "once_cell",
  "prometheus-client",
  "schemars",
  "serde",

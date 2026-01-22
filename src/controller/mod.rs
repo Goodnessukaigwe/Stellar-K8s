@@ -4,6 +4,7 @@
 //! and resource management for Stellar nodes.
 
 mod finalizers;
+pub mod metrics;
 mod reconciler;
 mod resources;
 

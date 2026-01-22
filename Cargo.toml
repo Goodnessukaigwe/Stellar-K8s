@@ -42,11 +42,12 @@ tower-http = { version = "0.5", features = ["trace"], optional = true }
 
 # Metrics
 prometheus-client = { version = "0.22", optional = true }
+once_cell = { version = "1.19", optional = true }
 
 [features]
 default = ["rest-api", "metrics"]
 rest-api = ["axum", "tower", "tower-http"]
-metrics = ["prometheus-client"]
+metrics = ["prometheus-client", "once_cell"]
 
 [dev-dependencies]
 k8s-openapi = { version = "0.22", features = ["latest"] }

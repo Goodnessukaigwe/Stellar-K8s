@@ -12,10 +12,19 @@ use crate::error::{Error, Result};
 
 use super::handlers;
 
+/// Metrics endpoint handler
+async fn metrics_handler() -> String {
+    use prometheus_client::encoding::text::encode;
+    let mut buffer = String::new();
+    encode(&mut buffer, &crate::controller::metrics::REGISTRY).unwrap();
+    buffer
+}
+
 /// Run the REST API server
 pub async fn run_server(state: Arc<ControllerState>) -> Result<()> {
     let app = Router::new()
         .route("/health", get(handlers::health))
+        .route("/metrics", get(metrics_handler))
         .route("/api/v1/nodes", get(handlers::list_nodes))
         .route("/api/v1/nodes/:namespace/:name", get(handlers::get_node))
         .layer(TraceLayer::new_for_http())
