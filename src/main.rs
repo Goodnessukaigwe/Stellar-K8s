@@ -10,15 +10,29 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_target(true))
-        .with(
-            EnvFilter::builder()
-                .with_default_directive(Level::INFO.into())
-                .from_env_lossy(),
-        )
-        .init();
+    // Initialize tracing with OpenTelemetry
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(Level::INFO.into())
+        .from_env_lossy();
+
+    let fmt_layer = fmt::layer().with_target(true);
+    
+    // Register the subscriber with both stdout logging and OpenTelemetry tracing
+    let registry = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer);
+
+    // Only enable OTEL if an endpoint is provided or via a flag
+    let otel_enabled = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok();
+    
+    if otel_enabled {
+        let otel_layer = stellar_k8s::telemetry::init_telemetry(&registry);
+        registry.with(otel_layer).init();
+        info!("OpenTelemetry tracing initialized");
+    } else {
+        registry.init();
+        info!("OpenTelemetry tracing disabled (OTEL_EXPORTER_OTLP_ENDPOINT not set)");
+    }
 
     info!("Starting Stellar-K8s Operator v{}", env!("CARGO_PKG_VERSION"));
 
@@ -45,7 +59,10 @@ async fn main() -> Result<(), Error> {
     }
 
     // Run the main controller loop
-    controller::run_controller(state).await?;
+    let result = controller::run_controller(state).await;
 
-    Ok(())
+    // Flush any remaining traces
+    stellar_k8s::telemetry::shutdown_telemetry();
+
+    result
 }

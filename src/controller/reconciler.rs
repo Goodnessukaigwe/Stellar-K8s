@@ -175,6 +175,7 @@ async fn reconcile(obj: Arc<StellarNode>, ctx: Arc<ControllerState>) -> Result<A
 }
 
 /// Apply/create/update the StellarNode resources
+#[instrument(skip(client, node), fields(name = %node.name_any(), namespace = node.namespace()))]
 async fn apply_stellar_node(client: &Client, node: &StellarNode) -> Result<Action> {
     let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
     let name = node.name_any();
@@ -312,6 +313,7 @@ async fn apply_stellar_node(client: &Client, node: &StellarNode) -> Result<Actio
 }
 
 /// Clean up resources when the StellarNode is deleted
+#[instrument(skip(client, node), fields(name = %node.name_any(), namespace = node.namespace()))]
 async fn cleanup_stellar_node(client: &Client, node: &StellarNode) -> Result<Action> {
     let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
     let name = node.name_any();
