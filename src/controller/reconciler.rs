@@ -43,7 +43,10 @@ pub async fn run_controller(state: Arc<ControllerState>) -> Result<()> {
     match stellar_nodes.list(&Default::default()).await {
         Ok(_) => info!("StellarNode CRD is available"),
         Err(e) => {
-            error!("StellarNode CRD not found. Please install the CRD first: {:?}", e);
+            error!(
+                "StellarNode CRD not found. Please install the CRD first: {:?}",
+                e
+            );
             return Err(Error::ConfigError(
                 "StellarNode CRD not installed".to_string(),
             ));
@@ -109,19 +112,19 @@ async fn apply_stellar_node(client: &Client, node: &StellarNode) -> Result<Actio
     // Validate the spec
     if let Err(e) = node.spec.validate() {
         warn!("Validation failed for {}/{}: {}", namespace, name, e);
-        update_status(client, node, "Failed", Some(&e)).await?;
+        update_status(client, node, "Failed", Some(&e), 0).await?;
         return Err(Error::ValidationError(e));
     }
 
     // Check if suspended
     if node.spec.suspended {
         info!("Node {}/{} is suspended, scaling to 0", namespace, name);
-        update_status(client, node, "Suspended", Some("Node is suspended")).await?;
+        update_status(client, node, "Suspended", Some("Node is suspended"), 0).await?;
         // Still create resources but with 0 replicas
     }
 
     // Update status to Creating
-    update_status(client, node, "Creating", Some("Creating resources")).await?;
+    update_status(client, node, "Creating", Some("Creating resources"), 0).await?;
 
     // 1. Create/update the PersistentVolumeClaim
     resources::ensure_pvc(client, node).await?;
@@ -149,6 +152,7 @@ async fn apply_stellar_node(client: &Client, node: &StellarNode) -> Result<Actio
     resources::ensure_service(client, node).await?;
     info!("Service ensured for {}/{}", namespace, name);
 
+
     // 5. Perform health check to determine if node is ready
     let health_result = health::check_node_health(client, node).await?;
     
@@ -175,6 +179,41 @@ async fn apply_stellar_node(client: &Client, node: &StellarNode) -> Result<Actio
         "Node {}/{} status updated to: {} - {}",
         namespace, name, phase, message
     );
+    // 5. Create/update Ingress if configured
+    resources::ensure_ingress(client, node).await?;
+    info!("Ingress ensured for {}/{}", namespace, name);
+
+    // 6. Create/update ServiceMonitor for Prometheus scraping (if autoscaling enabled)
+    if node.spec.autoscaling.is_some() {
+        resources::ensure_service_monitor(client, node).await?;
+        info!("ServiceMonitor ensured for {}/{}", namespace, name);
+
+        // 7. Create/update HPA for autoscaling
+        resources::ensure_hpa(client, node).await?;
+        info!("HPA ensured for {}/{}", namespace, name);
+    }
+
+    // 7. Create/update alerting rules
+    resources::ensure_alerting(client, node).await?;
+    info!("Alerting ensured for {}/{}", namespace, name);
+    // 8. Fetch the ready replicas from Deployment/StatefulSet status
+    let ready_replicas = get_ready_replicas(client, node).await.unwrap_or(0);
+
+    // 9. Update status to Running with ready replica count
+    let phase = if node.spec.suspended {
+        "Suspended"
+    } else {
+        "Running"
+    };
+    update_status(
+        client,
+        node,
+        phase,
+        Some("Resources created successfully"),
+        ready_replicas,
+    )
+    .await?;
+
 
     // Requeue based on current state
     let requeue_duration = if phase == "Ready" {
@@ -197,22 +236,42 @@ async fn cleanup_stellar_node(client: &Client, node: &StellarNode) -> Result<Act
 
     // Delete resources in reverse order of creation
 
-    // 1. Delete Service
+    // 0. Delete Alerting
+    if let Err(e) = resources::delete_alerting(client, node).await {
+        warn!("Failed to delete alerting: {:?}", e);
+    }
+
+    // 1. Delete HPA (if autoscaling was configured)
+    if let Err(e) = resources::delete_hpa(client, node).await {
+        warn!("Failed to delete HPA: {:?}", e);
+    }
+
+    // 2. Delete ServiceMonitor (if autoscaling was configured)
+    if let Err(e) = resources::delete_service_monitor(client, node).await {
+        warn!("Failed to delete ServiceMonitor: {:?}", e);
+    }
+
+    // 3. Delete Ingress
+    if let Err(e) = resources::delete_ingress(client, node).await {
+        warn!("Failed to delete Ingress: {:?}", e);
+    }
+
+    // 4. Delete Service
     if let Err(e) = resources::delete_service(client, node).await {
         warn!("Failed to delete Service: {:?}", e);
     }
 
-    // 2. Delete Deployment/StatefulSet
+    // 5. Delete Deployment/StatefulSet
     if let Err(e) = resources::delete_workload(client, node).await {
         warn!("Failed to delete workload: {:?}", e);
     }
 
-    // 3. Delete ConfigMap
+    // 6. Delete ConfigMap
     if let Err(e) = resources::delete_config_map(client, node).await {
         warn!("Failed to delete ConfigMap: {:?}", e);
     }
 
-    // 4. Delete PVC based on retention policy
+    // 7. Delete PVC based on retention policy
     if node.spec.should_delete_pvc() {
         info!(
             "Deleting PVC for node: {}/{} (retention policy: Delete)",
@@ -234,12 +293,58 @@ async fn cleanup_stellar_node(client: &Client, node: &StellarNode) -> Result<Act
     Ok(Action::await_change())
 }
 
+/// Fetch the ready replicas from the Deployment or StatefulSet status
+async fn get_ready_replicas(client: &Client, node: &StellarNode) -> Result<i32> {
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let name = node.name_any();
+
+    match node.spec.node_type {
+        NodeType::Validator => {
+            // Validators use StatefulSet
+            let api: Api<StatefulSet> = Api::namespaced(client.clone(), &namespace);
+            match api.get(&name).await {
+                Ok(statefulset) => {
+                    let ready_replicas = statefulset
+                        .status
+                        .as_ref()
+                        .and_then(|s| s.ready_replicas)
+                        .unwrap_or(0);
+                    Ok(ready_replicas)
+                }
+                Err(e) => {
+                    warn!("Failed to get StatefulSet {}/{}: {:?}", namespace, name, e);
+                    Ok(0)
+                }
+            }
+        }
+        NodeType::Horizon | NodeType::SorobanRpc => {
+            // RPC nodes use Deployment
+            let api: Api<Deployment> = Api::namespaced(client.clone(), &namespace);
+            match api.get(&name).await {
+                Ok(deployment) => {
+                    let ready_replicas = deployment
+                        .status
+                        .as_ref()
+                        .and_then(|s| s.ready_replicas)
+                        .unwrap_or(0);
+                    Ok(ready_replicas)
+                }
+                Err(e) => {
+                    warn!("Failed to get Deployment {}/{}: {:?}", namespace, name, e);
+                    Ok(0)
+                }
+            }
+        }
+    }
+}
+
 /// Update the status subresource of a StellarNode
 async fn update_status(
     client: &Client,
     node: &StellarNode,
     phase: &str,
     message: Option<&str>,
+    ready_replicas: i32,
 ) -> Result<()> {
     let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
     let api: Api<StellarNode> = Api::namespaced(client.clone(), &namespace);
@@ -248,7 +353,12 @@ async fn update_status(
         phase: phase.to_string(),
         message: message.map(String::from),
         observed_generation: node.metadata.generation,
-        replicas: if node.spec.suspended { 0 } else { node.spec.replicas },
+        replicas: if node.spec.suspended {
+            0
+        } else {
+            node.spec.replicas
+        },
+        ready_replicas,
         ..Default::default()
     };
 
@@ -337,11 +447,7 @@ async fn update_status_with_health(
 
 /// Error policy determines how to handle reconciliation errors
 fn error_policy(node: Arc<StellarNode>, error: &Error, _ctx: Arc<ControllerState>) -> Action {
-    error!(
-        "Reconciliation error for {}: {:?}",
-        node.name_any(),
-        error
-    );
+    error!("Reconciliation error for {}: {:?}", node.name_any(), error);
 
     // Use shorter retry for retriable errors
     let retry_duration = if error.is_retriable() {

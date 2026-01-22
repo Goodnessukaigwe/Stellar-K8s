@@ -148,6 +148,39 @@ pub struct ValidatorConfig {
     /// Node is in catchup mode (syncing historical data)
     #[serde(default)]
     pub catchup_complete: bool,
+    /// Source of the validator seed (Secret or KMS)
+    #[serde(default)]
+    pub key_source: KeySource,
+    /// KMS configuration for fetching the validator seed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kms_config: Option<KmsConfig>,
+}
+
+/// Source of security keys
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum KeySource {
+    /// Use a standard Kubernetes Secret
+    #[default]
+    Secret,
+    /// Fetch keys from a cloud KMS or Vault via init container
+    KMS,
+}
+
+/// Configuration for cloud-native KMS or Vault
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct KmsConfig {
+    /// KMS Key ID, ARN, or Vault path (e.g., "alias/my-key" or "secret/stellar/validator-key")
+    pub key_id: String,
+    /// Provider name (e.g., "aws", "google", "vault")
+    pub provider: String,
+    /// Cloud region (e.g., "us-east-1", "europe-west1")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
+    /// Image to use for the KMS init container (default: stellar/kms-fetcher:latest)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fetcher_image: Option<String>,
 }
 
 /// Horizon API server configuration
@@ -194,8 +227,160 @@ pub struct SorobanConfig {
     pub max_events_per_request: u32,
 }
 
+/// External database configuration for managed Postgres databases
+/// Supports RDS, Cloud SQL, CockroachDB, and other managed database services
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalDatabaseConfig {
+    /// Reference to a Kubernetes Secret containing database credentials
+    pub secret_key_ref: SecretKeyRef,
+}
+
+/// Reference to a key within a Kubernetes Secret
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretKeyRef {
+    /// Name of the Secret resource
+    pub name: String,
+    /// Key within the Secret to use for the database connection string
+    /// Common keys: "DATABASE_URL", "connection-string", "url"
+    /// For individual components: "host", "port", "database", "user", "password"
+    pub key: String,
+}
+
+/// Ingress configuration for exposing Horizon or Soroban RPC over HTTPS
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IngressConfig {
+    /// Optional ingressClassName (e.g., "nginx", "traefik")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_name: Option<String>,
+
+    /// Host rules with paths to route to the Service
+    pub hosts: Vec<IngressHost>,
+
+    /// TLS secret name used by the ingress controller for HTTPS termination
+    /// If provided, all hosts are added to the TLS section
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_secret_name: Option<String>,
+
+    /// cert-manager issuer name (namespaced)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cert_manager_issuer: Option<String>,
+
+    /// cert-manager cluster issuer name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cert_manager_cluster_issuer: Option<String>,
+
+    /// Additional annotations to attach to the Ingress
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<BTreeMap<String, String>>,
+}
+
+/// Ingress host entry
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IngressHost {
+    /// DNS host name (e.g., "horizon.stellar.example.com")
+    pub host: String,
+
+    /// HTTP paths served for this host
+    #[serde(
+        default = "default_ingress_paths",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub paths: Vec<IngressPath>,
+}
+
+/// Ingress path mapping
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IngressPath {
+    /// HTTP path prefix (e.g., "/")
+    pub path: String,
+
+    /// Path type ("Prefix" or "Exact")
+    #[serde(default = "default_path_type")]
+    pub path_type: Option<String>,
+}
+
+fn default_ingress_paths() -> Vec<IngressPath> {
+    vec![IngressPath {
+        path: "/".to_string(),
+        path_type: default_path_type(),
+    }]
+}
+
+fn default_path_type() -> Option<String> {
+    Some("Prefix".to_string())
+}
+
 fn default_max_events() -> u32 {
     10000
+}
+
+/// Horizontal Pod Autoscaling configuration for Horizon and SorobanRpc nodes
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoscalingConfig {
+    /// Minimum number of replicas
+    pub min_replicas: i32,
+
+    /// Maximum number of replicas
+    pub max_replicas: i32,
+
+    /// Target CPU utilization percentage (0-100)
+    /// When set, enables CPU-based scaling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_cpu_utilization_percentage: Option<i32>,
+
+    /// List of custom metrics to scale on (e.g., ["http_requests_per_second"])
+    /// Requires Prometheus Adapter to be installed in the cluster
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_metrics: Vec<String>,
+
+    /// Behavior configuration for scale up/down
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub behavior: Option<ScalingBehavior>,
+}
+
+/// Scaling behavior configuration for HPA
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScalingBehavior {
+    /// Scale up configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale_up: Option<ScalingPolicy>,
+
+    /// Scale down configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale_down: Option<ScalingPolicy>,
+}
+
+/// Scaling policy for scale up/down
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScalingPolicy {
+    /// Stabilization window in seconds (how long to wait before scaling again)
+    pub stabilization_window_seconds: Option<i32>,
+
+    /// List of policies with different percentage/pod changes
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub policies: Vec<HPAPolicy>,
+}
+
+/// Individual HPA policy
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAPolicy {
+    /// Type of policy: "Percent" or "Pods"
+    pub policy_type: String,
+
+    /// Value for the policy (percentage or number of pods)
+    pub value: i32,
+
+    /// Period in seconds over which the policy is applied
+    pub period_seconds: i32,
 }
 
 /// Condition for status reporting (Kubernetes convention)

@@ -5,13 +5,19 @@
 
 use std::collections::BTreeMap;
 
-use k8s_openapi::api::apps::v1::{
-    Deployment, DeploymentSpec, StatefulSet, StatefulSetSpec,
+use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec, StatefulSet, StatefulSetSpec};
+use k8s_openapi::api::autoscaling::v2::{
+    CrossVersionObjectReference, HorizontalPodAutoscaler, HorizontalPodAutoscalerSpec,
 };
 use k8s_openapi::api::core::v1::{
-    ConfigMap, Container, ContainerPort, EnvVar, PersistentVolumeClaim,
+    ConfigMap, Container, ContainerPort, EnvVar, EnvVarSource, PersistentVolumeClaim,
     PersistentVolumeClaimSpec, PodSpec, PodTemplateSpec, ResourceRequirements as K8sResources,
-    Service, ServicePort, ServiceSpec, Volume, VolumeMount, VolumeResourceRequirements,
+    SecretKeySelector, Service, ServicePort, ServiceSpec, Volume, VolumeMount,
+    VolumeResourceRequirements,
+};
+use k8s_openapi::api::networking::v1::{
+    HTTPIngressPath, HTTPIngressRuleValue, Ingress, IngressBackend, IngressRule,
+    IngressServiceBackend, IngressSpec, IngressTLS, ServiceBackendPort,
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta, OwnerReference};
@@ -19,13 +25,16 @@ use kube::api::{Api, DeleteParams, Patch, PatchParams, PostParams};
 use kube::{Client, Resource, ResourceExt};
 use tracing::{info, warn};
 
-use crate::crd::{NodeType, StellarNode};
+use crate::crd::{IngressConfig, KeySource, NodeType, StellarNode};
 use crate::error::{Error, Result};
 
 /// Get the standard labels for a StellarNode's resources
 fn standard_labels(node: &StellarNode) -> BTreeMap<String, String> {
     let mut labels = BTreeMap::new();
-    labels.insert("app.kubernetes.io/name".to_string(), "stellar-node".to_string());
+    labels.insert(
+        "app.kubernetes.io/name".to_string(),
+        "stellar-node".to_string(),
+    );
     labels.insert("app.kubernetes.io/instance".to_string(), node.name_any());
     labels.insert(
         "app.kubernetes.io/component".to_string(),
@@ -35,7 +44,10 @@ fn standard_labels(node: &StellarNode) -> BTreeMap<String, String> {
         "app.kubernetes.io/managed-by".to_string(),
         "stellar-operator".to_string(),
     );
-    labels.insert("stellar.org/node-type".to_string(), node.spec.node_type.to_string());
+    labels.insert(
+        "stellar.org/node-type".to_string(),
+        node.spec.node_type.to_string(),
+    );
     labels
 }
 
@@ -88,7 +100,10 @@ fn build_pvc(node: &StellarNode) -> PersistentVolumeClaim {
     let name = resource_name(node, "data");
 
     let mut requests = BTreeMap::new();
-    requests.insert("storage".to_string(), Quantity(node.spec.storage.size.clone()));
+    requests.insert(
+        "storage".to_string(),
+        Quantity(node.spec.storage.size.clone()),
+    );
 
     // Merge custom annotations from storage config with existing annotations
     let annotations = node.spec.storage.annotations.clone().unwrap_or_default();
@@ -178,13 +193,19 @@ fn build_config_map(node: &StellarNode) -> ConfigMap {
         }
         NodeType::Horizon => {
             if let Some(config) = &node.spec.horizon_config {
-                data.insert("STELLAR_CORE_URL".to_string(), config.stellar_core_url.clone());
+                data.insert(
+                    "STELLAR_CORE_URL".to_string(),
+                    config.stellar_core_url.clone(),
+                );
                 data.insert("INGEST".to_string(), config.enable_ingest.to_string());
             }
         }
         NodeType::SorobanRpc => {
             if let Some(config) = &node.spec.soroban_config {
-                data.insert("STELLAR_CORE_URL".to_string(), config.stellar_core_url.clone());
+                data.insert(
+                    "STELLAR_CORE_URL".to_string(),
+                    config.stellar_core_url.clone(),
+                );
                 if let Some(captive_config) = &config.captive_core_config {
                     data.insert("captive-core.cfg".to_string(), captive_config.clone());
                 }
@@ -235,8 +256,12 @@ pub async fn ensure_deployment(client: &Client, node: &StellarNode) -> Result<()
     let deployment = build_deployment(node);
 
     let patch = Patch::Apply(&deployment);
-    api.patch(&name, &PatchParams::apply("stellar-operator").force(), &patch)
-        .await?;
+    api.patch(
+        &name,
+        &PatchParams::apply("stellar-operator").force(),
+        &patch,
+    )
+    .await?;
 
     Ok(())
 }
@@ -245,7 +270,11 @@ fn build_deployment(node: &StellarNode) -> Deployment {
     let labels = standard_labels(node);
     let name = node.name_any();
 
-    let replicas = if node.spec.suspended { 0 } else { node.spec.replicas };
+    let replicas = if node.spec.suspended {
+        0
+    } else {
+        node.spec.replicas
+    };
 
     Deployment {
         metadata: ObjectMeta {
@@ -281,8 +310,12 @@ pub async fn ensure_statefulset(client: &Client, node: &StellarNode) -> Result<(
     let statefulset = build_statefulset(node);
 
     let patch = Patch::Apply(&statefulset);
-    api.patch(&name, &PatchParams::apply("stellar-operator").force(), &patch)
-        .await?;
+    api.patch(
+        &name,
+        &PatchParams::apply("stellar-operator").force(),
+        &patch,
+    )
+    .await?;
 
     Ok(())
 }
@@ -359,8 +392,12 @@ pub async fn ensure_service(client: &Client, node: &StellarNode) -> Result<()> {
     let service = build_service(node);
 
     let patch = Patch::Apply(&service);
-    api.patch(&name, &PatchParams::apply("stellar-operator").force(), &patch)
-        .await?;
+    api.patch(
+        &name,
+        &PatchParams::apply("stellar-operator").force(),
+        &patch,
+    )
+    .await?;
 
     Ok(())
 }
@@ -429,41 +466,238 @@ pub async fn delete_service(client: &Client, node: &StellarNode) -> Result<()> {
 }
 
 // ============================================================================
+// Ingress
+// ============================================================================
+
+/// Ensure an Ingress exists for Horizon or Soroban RPC nodes when configured
+pub async fn ensure_ingress(client: &Client, node: &StellarNode) -> Result<()> {
+    // Ingress is only supported for Horizon and SorobanRpc
+    let ingress_cfg = match &node.spec.ingress {
+        Some(cfg)
+            if matches!(
+                node.spec.node_type,
+                NodeType::Horizon | NodeType::SorobanRpc
+            ) =>
+        {
+            cfg
+        }
+        _ => return Ok(()),
+    };
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let api: Api<Ingress> = Api::namespaced(client.clone(), &namespace);
+    let name = resource_name(node, "ingress");
+
+    let ingress = build_ingress(node, ingress_cfg);
+
+    api.patch(
+        &name,
+        &PatchParams::apply("stellar-operator").force(),
+        &Patch::Apply(&ingress),
+    )
+    .await?;
+
+    info!("Ingress ensured for {}/{}", namespace, name);
+    Ok(())
+}
+
+fn build_ingress(node: &StellarNode, config: &IngressConfig) -> Ingress {
+    let labels = standard_labels(node);
+    let name = resource_name(node, "ingress");
+
+    let service_port = match node.spec.node_type {
+        NodeType::Horizon | NodeType::SorobanRpc => 8000,
+        NodeType::Validator => 11626,
+    };
+
+    // Merge user-provided annotations with cert-manager issuer hints
+    let mut annotations = config.annotations.clone().unwrap_or_default();
+    if let Some(issuer) = &config.cert_manager_issuer {
+        annotations.insert("cert-manager.io/issuer".to_string(), issuer.clone());
+    }
+    if let Some(cluster_issuer) = &config.cert_manager_cluster_issuer {
+        annotations.insert(
+            "cert-manager.io/cluster-issuer".to_string(),
+            cluster_issuer.clone(),
+        );
+    }
+
+    let rules: Vec<IngressRule> = config
+        .hosts
+        .iter()
+        .map(|host| IngressRule {
+            host: Some(host.host.clone()),
+            http: Some(HTTPIngressRuleValue {
+                paths: host
+                    .paths
+                    .iter()
+                    .map(|p| HTTPIngressPath {
+                        path: Some(p.path.clone()),
+                        path_type: p.path_type.clone().unwrap_or_else(|| "Prefix".to_string()),
+                        backend: IngressBackend {
+                            service: Some(IngressServiceBackend {
+                                name: node.name_any(),
+                                port: Some(ServiceBackendPort {
+                                    number: Some(service_port),
+                                    name: None,
+                                }),
+                            }),
+                            ..Default::default()
+                        },
+                    })
+                    .collect(),
+            }),
+        })
+        .collect();
+
+    let tls = config.tls_secret_name.as_ref().map(|secret| {
+        vec![IngressTLS {
+            hosts: Some(config.hosts.iter().map(|h| h.host.clone()).collect()),
+            secret_name: Some(secret.clone()),
+            ..Default::default()
+        }]
+    });
+
+    Ingress {
+        metadata: ObjectMeta {
+            name: Some(name),
+            namespace: node.namespace(),
+            labels: Some(labels),
+            annotations: if annotations.is_empty() {
+                None
+            } else {
+                Some(annotations)
+            },
+            owner_references: Some(vec![owner_reference(node)]),
+            ..Default::default()
+        },
+        spec: Some(IngressSpec {
+            ingress_class_name: config.class_name.clone(),
+            rules: Some(rules),
+            tls,
+            ..Default::default()
+        }),
+        status: None,
+    }
+}
+
+/// Delete the Ingress for a node
+pub async fn delete_ingress(client: &Client, node: &StellarNode) -> Result<()> {
+    if node.spec.ingress.is_none() {
+        return Ok(());
+    }
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let api: Api<Ingress> = Api::namespaced(client.clone(), &namespace);
+    let name = resource_name(node, "ingress");
+
+    match api.delete(&name, &DeleteParams::default()).await {
+        Ok(_) => info!("Deleted Ingress {}", name),
+        Err(kube::Error::Api(e)) if e.code == 404 => {
+            warn!("Ingress {} not found, already deleted", name);
+        }
+        Err(e) => return Err(Error::KubeError(e)),
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // Pod Template Builder
 // ============================================================================
 
 fn build_pod_template(node: &StellarNode, labels: &BTreeMap<String, String>) -> PodTemplateSpec {
-    let container = build_container(node);
+    let mut pod_spec = PodSpec {
+        containers: vec![build_container(node)],
+        volumes: Some(vec![
+            Volume {
+                name: "data".to_string(),
+                persistent_volume_claim: Some(
+                    k8s_openapi::api::core::v1::PersistentVolumeClaimVolumeSource {
+                        claim_name: resource_name(node, "data"),
+                        ..Default::default()
+                    },
+                ),
+                ..Default::default()
+            },
+            Volume {
+                name: "config".to_string(),
+                config_map: Some(k8s_openapi::api::core::v1::ConfigMapVolumeSource {
+                    name: Some(resource_name(node, "config")),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        ]),
+        ..Default::default()
+    };
+
+    // Add KMS init container if needed (Validator nodes only)
+    if let NodeType::Validator = node.spec.node_type {
+        if let Some(validator_config) = &node.spec.validator_config {
+            if validator_config.key_source == KeySource::KMS {
+                if let Some(kms_config) = &validator_config.kms_config {
+                    // Add shared memory volume for keys (never touches disk)
+                    let volumes = pod_spec.volumes.get_or_insert_with(Vec::new);
+                    volumes.push(Volume {
+                        name: "keys".to_string(),
+                        empty_dir: Some(k8s_openapi::api::core::v1::EmptyDirVolumeSource {
+                            medium: Some("Memory".to_string()),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    });
+
+                    // Add KMS fetcher init container
+                    let init_containers = pod_spec.init_containers.get_or_insert_with(Vec::new);
+                    init_containers.push(Container {
+                        name: "kms-fetcher".to_string(),
+                        image: Some(
+                            kms_config
+                                .fetcher_image
+                                .clone()
+                                .unwrap_or_else(|| "stellar/kms-fetcher:latest".to_string()),
+                        ),
+                        env: Some(vec![
+                            EnvVar {
+                                name: "KMS_KEY_ID".to_string(),
+                                value: Some(kms_config.key_id.clone()),
+                                ..Default::default()
+                            },
+                            EnvVar {
+                                name: "KMS_PROVIDER".to_string(),
+                                value: Some(kms_config.provider.clone()),
+                                ..Default::default()
+                            },
+                            EnvVar {
+                                name: "KMS_REGION".to_string(),
+                                value: kms_config.region.clone(),
+                                ..Default::default()
+                            },
+                            EnvVar {
+                                name: "KEY_OUTPUT_PATH".to_string(),
+                                value: Some("/keys/validator-seed".to_string()),
+                                ..Default::default()
+                            },
+                        ]),
+                        volume_mounts: Some(vec![VolumeMount {
+                            name: "keys".to_string(),
+                            mount_path: "/keys".to_string(),
+                            ..Default::default()
+                        }]),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+    }
 
     PodTemplateSpec {
         metadata: Some(ObjectMeta {
             labels: Some(labels.clone()),
             ..Default::default()
         }),
-        spec: Some(PodSpec {
-            containers: vec![container],
-            volumes: Some(vec![
-                Volume {
-                    name: "data".to_string(),
-                    persistent_volume_claim: Some(
-                        k8s_openapi::api::core::v1::PersistentVolumeClaimVolumeSource {
-                            claim_name: resource_name(node, "data"),
-                            ..Default::default()
-                        },
-                    ),
-                    ..Default::default()
-                },
-                Volume {
-                    name: "config".to_string(),
-                    config_map: Some(k8s_openapi::api::core::v1::ConfigMapVolumeSource {
-                        name: Some(resource_name(node, "config")),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ]),
-            ..Default::default()
-        }),
+        spec: Some(pod_spec),
     }
 }
 
@@ -488,11 +722,93 @@ fn build_container(node: &StellarNode) -> Container {
         Quantity(node.spec.resources.limits.memory.clone()),
     );
 
-    let (container_port, data_mount_path) = match node.spec.node_type {
-        NodeType::Validator => (11625, "/opt/stellar/data"),
-        NodeType::Horizon => (8000, "/data"),
-        NodeType::SorobanRpc => (8000, "/data"),
+    let (container_port, data_mount_path, db_env_var_name) = match node.spec.node_type {
+        NodeType::Validator => (11625, "/opt/stellar/data", "DATABASE"),
+        NodeType::Horizon => (8000, "/data", "DATABASE_URL"),
+        NodeType::SorobanRpc => (8000, "/data", "DATABASE_URL"),
     };
+
+    // Build environment variables
+    let mut env_vars = vec![EnvVar {
+        name: "NETWORK_PASSPHRASE".to_string(),
+        value: Some(node.spec.network.passphrase().to_string()),
+        ..Default::default()
+    }];
+
+    // Source validator seed from Secret or shared RAM volume (KMS)
+    if let NodeType::Validator = node.spec.node_type {
+        if let Some(validator_config) = &node.spec.validator_config {
+            match validator_config.key_source {
+                KeySource::Secret => {
+                    env_vars.push(EnvVar {
+                        name: "STELLAR_CORE_SEED".to_string(),
+                        value: None,
+                        value_from: Some(EnvVarSource {
+                            secret_key_ref: Some(SecretKeySelector {
+                                name: Some(validator_config.seed_secret_ref.clone()),
+                                key: "STELLAR_CORE_SEED".to_string(),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    });
+                }
+                KeySource::KMS => {
+                    // Seed will be read from /keys/validator-seed file provided by init container
+                    env_vars.push(EnvVar {
+                        name: "STELLAR_CORE_SEED_PATH".to_string(),
+                        value: Some("/keys/validator-seed".to_string()),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+    }
+
+    // Add database environment variable from secret if external database is configured
+    if let Some(db_config) = &node.spec.database {
+        env_vars.push(EnvVar {
+            name: db_env_var_name.to_string(),
+            value: None,
+            value_from: Some(EnvVarSource {
+                secret_key_ref: Some(SecretKeySelector {
+                    name: Some(db_config.secret_key_ref.name.clone()),
+                    key: db_config.secret_key_ref.key.clone(),
+                    optional: None,
+                }),
+                ..Default::default()
+            }),
+        });
+    }
+
+    let mut volume_mounts = vec![
+        VolumeMount {
+            name: "data".to_string(),
+            mount_path: data_mount_path.to_string(),
+            ..Default::default()
+        },
+        VolumeMount {
+            name: "config".to_string(),
+            mount_path: "/config".to_string(),
+            read_only: Some(true),
+            ..Default::default()
+        },
+    ];
+
+    // Mount keys volume if using KMS
+    if let NodeType::Validator = node.spec.node_type {
+        if let Some(validator_config) = &node.spec.validator_config {
+            if validator_config.key_source == KeySource::KMS {
+                volume_mounts.push(VolumeMount {
+                    name: "keys".to_string(),
+                    mount_path: "/keys".to_string(),
+                    read_only: Some(true),
+                    ..Default::default()
+                });
+            }
+        }
+    }
 
     Container {
         name: "stellar-node".to_string(),
@@ -501,29 +817,268 @@ fn build_container(node: &StellarNode) -> Container {
             container_port,
             ..Default::default()
         }]),
-        env: Some(vec![EnvVar {
-            name: "NETWORK_PASSPHRASE".to_string(),
-            value: Some(node.spec.network.passphrase().to_string()),
-            ..Default::default()
-        }]),
+        env: Some(env_vars),
         resources: Some(K8sResources {
             requests: Some(requests),
             limits: Some(limits),
             claims: None,
         }),
-        volume_mounts: Some(vec![
-            VolumeMount {
-                name: "data".to_string(),
-                mount_path: data_mount_path.to_string(),
-                ..Default::default()
-            },
-            VolumeMount {
-                name: "config".to_string(),
-                mount_path: "/config".to_string(),
-                read_only: Some(true),
-                ..Default::default()
-            },
-        ]),
+        volume_mounts: Some(volume_mounts),
         ..Default::default()
     }
+}
+// ============================================================================
+// HorizontalPodAutoscaler
+// ============================================================================
+
+/// Ensure a HorizontalPodAutoscaler exists for RPC nodes with autoscaling enabled
+pub async fn ensure_hpa(client: &Client, node: &StellarNode) -> Result<()> {
+    // Only create HPA for Horizon and SorobanRpc nodes with autoscaling config
+    if !matches!(
+        node.spec.node_type,
+        NodeType::Horizon | NodeType::SorobanRpc
+    ) || node.spec.autoscaling.is_none()
+    {
+        return Ok(());
+    }
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let api: Api<HorizontalPodAutoscaler> = Api::namespaced(client.clone(), &namespace);
+    let name = resource_name(node, "hpa");
+
+    let hpa = build_hpa(node)?;
+
+    let patch = Patch::Apply(&hpa);
+    api.patch(
+        &name,
+        &PatchParams::apply("stellar-operator").force(),
+        &patch,
+    )
+    .await?;
+
+    info!("HPA ensured for {}/{}", namespace, name);
+    Ok(())
+}
+
+// ============================================================================
+// Alerting (ConfigMap with Prometheus Rules)
+// ============================================================================
+
+/// Ensure alerting resources exist for the node if enabled
+pub async fn ensure_alerting(client: &Client, node: &StellarNode) -> Result<()> {
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let name = resource_name(node, "alerts");
+
+    if !node.spec.alerting {
+        return delete_alerting(client, node).await;
+    }
+
+    let labels = standard_labels(node);
+    let mut data = BTreeMap::new();
+
+    // Define standard alerting rules in Prometheus format
+    let rules = format!(
+        r#"groups:
+- name: {instance}.rules
+  rules:
+  - alert: StellarNodeDown
+    expr: up{{app_kubernetes_io_instance="{instance}"}} == 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Stellar node {instance} is down"
+      description: "The Stellar node {instance} has been down for more than 5 minutes."
+  - alert: StellarNodeHighMemory
+    expr: container_memory_usage_bytes{{pod=~"{instance}.*"}} / container_spec_memory_limit_bytes > 0.8
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Stellar node {instance} high memory usage"
+      description: "The Stellar node {instance} is using more than 80% of its memory limit."
+  - alert: StellarNodeSyncIssue
+    expr: stellar_core_sync_status{{app_kubernetes_io_instance="{instance}"}} != 1
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Stellar node {instance} sync issue"
+      description: "The Stellar node {instance} has not been in sync for more than 15 minutes."
+"#,
+        instance = node.name_any()
+    );
+
+    data.insert("alerts.yaml".to_string(), rules);
+
+    let cm = ConfigMap {
+        metadata: ObjectMeta {
+            name: Some(name.clone()),
+            namespace: Some(namespace.clone()),
+            labels: Some(labels),
+            owner_references: Some(vec![owner_reference(node)]),
+            ..Default::default()
+        },
+        data: Some(data),
+        ..Default::default()
+    };
+
+    let api: Api<ConfigMap> = Api::namespaced(client.clone(), &namespace);
+    let patch = Patch::Apply(&cm);
+    api.patch(
+        &name,
+        &PatchParams::apply("stellar-operator").force(),
+        &patch,
+    )
+    .await?;
+
+    info!(
+        "Alerting ConfigMap {} ensured for {}/{}",
+        name,
+        namespace,
+        node.name_any()
+    );
+    Ok(())
+}
+
+fn build_hpa(node: &StellarNode) -> Result<HorizontalPodAutoscaler> {
+    let autoscaling = node
+        .spec
+        .autoscaling
+        .as_ref()
+        .ok_or_else(|| Error::ValidationError("Autoscaling config not found".to_string()))?;
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let name = resource_name(node, "hpa");
+    let deployment_name = node.name_any();
+
+    // Note: Custom metrics require Prometheus Adapter to be installed
+    // For now, we create a basic HPA with just the min/max replicas configured
+    // Users can manually add metrics via kubectl or kustomize/helm patches
+    if !autoscaling.custom_metrics.is_empty() {
+        info!(
+            "Custom metrics configured: {:?}. These require Prometheus Adapter to be installed.",
+            autoscaling.custom_metrics
+        );
+    }
+
+    let hpa = HorizontalPodAutoscaler {
+        metadata: ObjectMeta {
+            name: Some(name),
+            namespace: Some(namespace),
+            labels: Some(standard_labels(node)),
+            owner_references: Some(vec![owner_reference(node)]),
+            ..Default::default()
+        },
+        spec: Some(HorizontalPodAutoscalerSpec {
+            scale_target_ref: CrossVersionObjectReference {
+                api_version: Some("apps/v1".to_string()),
+                kind: "Deployment".to_string(),
+                name: deployment_name,
+            },
+            min_replicas: Some(autoscaling.min_replicas),
+            max_replicas: autoscaling.max_replicas,
+            metrics: None,
+            behavior: None,
+        }),
+        status: None,
+    };
+
+    Ok(hpa)
+}
+
+/// Delete the HPA when node is deleted
+pub async fn delete_hpa(client: &Client, node: &StellarNode) -> Result<()> {
+    // Only delete HPA if autoscaling was configured
+    if node.spec.autoscaling.is_none() {
+        return Ok(());
+    }
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let api: Api<HorizontalPodAutoscaler> = Api::namespaced(client.clone(), &namespace);
+    let name = resource_name(node, "hpa");
+
+    match api.delete(&name, &DeleteParams::default()).await {
+        Ok(_) => {
+            info!("HPA deleted for {}/{}", namespace, name);
+        }
+        Err(kube::Error::Api(api_err)) if api_err.code == 404 => {
+            info!("HPA {}/{} not found (already deleted)", namespace, name);
+        }
+        Err(e) => {
+            warn!("Failed to delete HPA {}/{}: {:?}", namespace, name, e);
+        }
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// ServiceMonitor (Prometheus Operator)
+// ============================================================================
+
+/// Ensure a ServiceMonitor exists for Prometheus scraping (Prometheus Operator)
+///
+/// ServiceMonitor is a custom resource from the Prometheus Operator.
+/// Users should manually create ServiceMonitor resources or use a tool like
+/// kustomize/helm to generate them. This function documents the capability.
+pub async fn ensure_service_monitor(_client: &Client, node: &StellarNode) -> Result<()> {
+    // Only log for Horizon and SorobanRpc nodes with autoscaling config
+    if !matches!(
+        node.spec.node_type,
+        NodeType::Horizon | NodeType::SorobanRpc
+    ) || node.spec.autoscaling.is_none()
+    {
+        return Ok(());
+    }
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let name = resource_name(node, "service-monitor");
+
+    info!(
+        "ServiceMonitor configuration available for {}/{}. Users should manually create the ServiceMonitor resource.",
+        namespace, name
+    );
+
+    info!(
+        "ServiceMonitor should scrape metrics on port 'http' at path '/metrics' from service: {}",
+        node.name_any()
+    );
+
+    Ok(())
+}
+
+/// Delete the ServiceMonitor when node is deleted
+pub async fn delete_service_monitor(_client: &Client, node: &StellarNode) -> Result<()> {
+    // Only delete ServiceMonitor if autoscaling was configured
+    if node.spec.autoscaling.is_none() {
+        return Ok(());
+    }
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let name = resource_name(node, "service-monitor");
+
+    info!(
+        "Note: ServiceMonitor {}/{} must be manually deleted if it was created",
+        namespace, name
+    );
+
+    Ok(())
+}
+
+/// Delete alerting resources
+pub async fn delete_alerting(client: &Client, node: &StellarNode) -> Result<()> {
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let name = resource_name(node, "alerts");
+
+    let api: Api<ConfigMap> = Api::namespaced(client.clone(), &namespace);
+    match api.delete(&name, &DeleteParams::default()).await {
+        Ok(_) => info!("Deleted alerting ConfigMap {}", name),
+        Err(kube::Error::Api(e)) if e.code == 404 => {
+            // Already gone
+        }
+        Err(e) => return Err(Error::KubeError(e)),
+    }
+
+    Ok(())
 }
