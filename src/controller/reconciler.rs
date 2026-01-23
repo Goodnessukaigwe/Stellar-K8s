@@ -1,6 +1,4 @@
-//! Main reconciler for StellarNode resources
-//!
-//! Implements the controller pattern using kube-rs runtime.
+
 
 use std::sync::Arc;
 use std::time::Duration;
