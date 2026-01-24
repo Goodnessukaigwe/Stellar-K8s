@@ -1210,6 +1210,16 @@ fn build_pod_template(
         ..Default::default()
     };
 
+    // Add Horizon database migration init container
+    if let NodeType::Horizon = node.spec.node_type {
+        if let Some(horizon_config) = &node.spec.horizon_config {
+            if horizon_config.auto_migration {
+                let init_containers = pod_spec.init_containers.get_or_insert_with(Vec::new);
+                init_containers.push(build_horizon_migration_container(node));
+            }
+        }
+    }
+
     // Add KMS init container if needed (Validator nodes only)
     if let NodeType::Validator = node.spec.node_type {
         if let Some(validator_config) = &node.spec.validator_config {
@@ -1447,6 +1457,28 @@ fn build_container(node: &StellarNode, enable_mtls: bool) -> Container {
         volume_mounts: Some(volume_mounts),
         ..Default::default()
     }
+}
+
+/// Build the migration container for Horizon
+fn build_horizon_migration_container(node: &StellarNode) -> Container {
+    let mut container = build_container(node, false);
+    container.name = "horizon-db-migration".to_string();
+    // Use a shell to try upgrade then init if needed, ensuring the DB is ready
+    container.command = Some(vec!["/bin/sh".to_string()]);
+    container.args = Some(vec![
+        "-c".to_string(),
+        "horizon db upgrade || horizon db init".to_string(),
+    ]);
+
+    // Migration doesn't need ports or probes
+    container.ports = None;
+    container.liveness_probe = None;
+    container.readiness_probe = None;
+    container.startup_probe = None;
+    container.lifecycle = None;
+
+    // Use slightly less resources for migration if desired, but reusing main ones is safer
+    container
 }
 // ============================================================================
 // HorizontalPodAutoscaler

@@ -387,6 +387,10 @@ pub struct StellarNodeStatus {
     /// Total number of desired replicas
     #[serde(default)]
     pub replicas: i32,
+
+    /// Version of the database schema after last successful migration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_migrated_version: Option<String>,
 }
 
 /// BGP advertisement status information

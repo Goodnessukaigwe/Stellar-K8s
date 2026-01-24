@@ -214,6 +214,38 @@ async fn apply_stellar_node(
         // Still create resources but with 0 replicas
     }
 
+    // Handle Horizon database migrations
+    if node.spec.node_type == NodeType::Horizon {
+        if let Some(horizon_config) = &node.spec.horizon_config {
+            if horizon_config.auto_migration {
+                let current_version = &node.spec.version;
+                let last_migrated = node
+                    .status
+                    .as_ref()
+                    .and_then(|s| s.last_migrated_version.as_ref());
+
+                if last_migrated.map(|v| v != current_version).unwrap_or(true) {
+                    info!(
+                        "Database migration required for Horizon {}/{} (version: {})",
+                        namespace, name, current_version
+                    );
+
+                    emit_event(
+                        client,
+                        node,
+                        "Normal",
+                        "DatabaseMigrationRequired",
+                        &format!(
+                            "Database migration will be performed via InitContainer for version {}",
+                            current_version
+                        ),
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+
     // History Archive Health Check for Validators
     if node.spec.node_type == NodeType::Validator {
         if let Some(validator_config) = &node.spec.validator_config {
@@ -1148,6 +1180,13 @@ async fn update_status_with_health(
             0
         },
         ledger_sequence: health.ledger_sequence,
+        last_migrated_version: if health.synced && node.spec.node_type == NodeType::Horizon {
+            Some(node.spec.version.clone())
+        } else {
+            node.status
+                .as_ref()
+                .and_then(|s| s.last_migrated_version.clone())
+        },
         conditions,
         ..Default::default()
     };

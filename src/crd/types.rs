@@ -203,6 +203,9 @@ pub struct HorizonConfig {
     /// Enable experimental features
     #[serde(default)]
     pub enable_experimental_ingestion: bool,
+    /// Automatically run database migrations on startup or upgrade
+    #[serde(default = "default_true")]
+    pub auto_migration: bool,
 }
 
 fn default_true() -> bool {
