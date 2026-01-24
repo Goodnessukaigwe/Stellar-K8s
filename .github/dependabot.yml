@@ -1,0 +1,91 @@
+# Dependabot configuration for automated dependency updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # GitHub Actions - Keep workflow actions up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "stellar-k8s-maintainers"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # Cargo - Rust dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "stellar-k8s-maintainers"
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Group non-security updates to reduce PR noise
+    groups:
+      kubernetes-client:
+        patterns:
+          - "kube*"
+          - "k8s-openapi"
+      tokio-ecosystem:
+        patterns:
+          - "tokio*"
+          - "hyper*"
+          - "tower*"
+      serialization:
+        patterns:
+          - "serde*"
+          - "schemars"
+      tracing:
+        patterns:
+          - "tracing*"
+          - "opentelemetry*"
+
+  # Docker - Base image updates
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "stellar-k8s-maintainers"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "build"
+      include: "scope"
+
+  # Helm Charts
+  - package-ecosystem: "docker"
+    directory: "/charts/stellar-operator"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "stellar-k8s-maintainers"
+    labels:
+      - "dependencies"
+      - "helm"
+    commit-message:
+      prefix: "helm"
+      include: "scope"
