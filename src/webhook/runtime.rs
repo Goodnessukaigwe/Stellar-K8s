@@ -10,7 +10,8 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::{debug, info, instrument, warn};
 use wasmtime::*;
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi::preview1::{self, WasiP1Ctx};
+use wasmtime_wasi::WasiCtxBuilder;
 
 use super::types::{
     PluginConfig, PluginExecutionResult, PluginLimits, PluginMetadata, ValidationInput,
@@ -40,7 +41,7 @@ struct CachedModule {
 
 /// Store state for Wasm execution
 struct PluginState {
-    wasi: WasiCtx,
+    wasi: WasiP1Ctx,
     input_buffer: Vec<u8>,
     output_buffer: Vec<u8>,
 }
@@ -275,7 +276,7 @@ impl WasmRuntime {
             .build();
 
         // Create WASI context (sandboxed, no filesystem or network access)
-        let wasi = WasiCtxBuilder::new().build();
+        let wasi = WasiCtxBuilder::new().build_p1();
 
         let state = PluginState {
             wasi,
@@ -296,7 +297,7 @@ impl WasmRuntime {
 
         // Create linker with WASI
         let mut linker = Linker::new(engine);
-        wasmtime_wasi::add_to_linker(&mut linker, |state: &mut PluginState| &mut state.wasi)
+        preview1::add_to_linker_sync(&mut linker, |state: &mut PluginState| &mut state.wasi)
             .map_err(|e| Error::PluginError(format!("Failed to add WASI to linker: {}", e)))?;
 
         // Add host functions for input/output

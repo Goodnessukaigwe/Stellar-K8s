@@ -174,7 +174,9 @@ impl StellarNodeSpec {
     /// # database: None,
     /// # autoscaling: None,
     /// # ingress: None,
+    /// # maintenance_mode: false,
     /// # network_policy: None,
+    /// # topology_spread_constraints: None,
     /// };
     /// match spec.validate() {
     ///     Ok(_) => println!("Valid spec"),
@@ -290,7 +292,9 @@ impl StellarNodeSpec {
     /// # database: None,
     /// # autoscaling: None,
     /// # ingress: None,
+    /// # maintenance_mode: false,
     /// # network_policy: None,
+    /// # topology_spread_constraints: None,
     /// };
     /// assert_eq!(spec.container_image(), "stellar/stellar-core:v21.0.0");
     /// ```
@@ -337,7 +341,9 @@ impl StellarNodeSpec {
     /// # database: None,
     /// # autoscaling: None,
     /// # ingress: None,
+    /// # maintenance_mode: false,
     /// # network_policy: None,
+    /// # topology_spread_constraints: None,
     /// };
     /// assert!(spec.should_delete_pvc());
     /// ```

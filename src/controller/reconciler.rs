@@ -93,7 +93,12 @@ pub struct ControllerState {
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let client = Client::try_default().await?;
-///     let state = Arc::new(ControllerState { client });
+///     let state = Arc::new(ControllerState {
+///         client,
+///         enable_mtls: false,
+///         mtls_config: None,
+///         operator_namespace: "stellar-operator".to_string(),
+///     });
 ///     run_controller(state).await?;
 ///     Ok(())
 /// }
