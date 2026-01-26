@@ -50,6 +50,8 @@ use super::conditions;
 use super::dr;
 use super::finalizers::STELLAR_NODE_FINALIZER;
 use super::health;
+#[cfg(feature = "metrics")]
+use super::metrics;
 use super::mtls;
 use super::peer_discovery;
 use super::remediation;
@@ -311,37 +313,49 @@ async fn apply_stellar_node(
 
     // 2. Handle suspension
     if node.spec.suspended {
-        apply_or_emit(ctx, node, ActionType::Update, "Suspended state resources", async {
-            resources::ensure_pvc(client, node).await?;
-            resources::ensure_config_map(client, node, None, ctx.enable_mtls).await?;
+        apply_or_emit(
+            ctx,
+            node,
+            ActionType::Update,
+            "Suspended state resources",
+            async {
+                resources::ensure_pvc(client, node).await?;
+                resources::ensure_config_map(client, node, None, ctx.enable_mtls).await?;
 
-            match node.spec.node_type {
-                NodeType::Validator => {
-                    resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
+                match node.spec.node_type {
+                    NodeType::Validator => {
+                        resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
+                    }
+                    NodeType::Horizon | NodeType::SorobanRpc => {
+                        resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
+                    }
                 }
-                NodeType::Horizon | NodeType::SorobanRpc => {
-                    resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
-                }
-            }
 
-            resources::ensure_service(client, node, ctx.enable_mtls).await?;
-            Ok(())
-        })
+                resources::ensure_service(client, node, ctx.enable_mtls).await?;
+                Ok(())
+            },
+        )
         .await?;
 
-        apply_or_emit(ctx, node, ActionType::Update, "Status (Maintenance)", async {
-            update_status(
-                client,
-                node,
-                "Maintenance",
-                Some("Manual maintenance mode active; workload management paused"),
-                0,
-                true,
-            )
-            .await?;
-            update_suspended_status(client, node).await?;
-            Ok(())
-        })
+        apply_or_emit(
+            ctx,
+            node,
+            ActionType::Update,
+            "Status (Maintenance)",
+            async {
+                update_status(
+                    client,
+                    node,
+                    "Maintenance",
+                    Some("Manual maintenance mode active; workload management paused"),
+                    0,
+                    true,
+                )
+                .await?;
+                update_suspended_status(client, node).await?;
+                Ok(())
+            },
+        )
         .await?;
 
         return Ok(Action::requeue(Duration::from_secs(60)));
@@ -440,10 +454,16 @@ async fn apply_stellar_node(
                         .await?;
 
                         // Update status with archive health condition (observed_generation NOT updated to trigger retry)
-                        apply_or_emit(ctx, node, ActionType::Update, "Status (Archive Health Failed)", async {
-                            update_archive_health_status(client, node, &health_result).await?;
-                            Ok(())
-                        })
+                        apply_or_emit(
+                            ctx,
+                            node,
+                            ActionType::Update,
+                            "Status (Archive Health Failed)",
+                            async {
+                                update_archive_health_status(client, node, &health_result).await?;
+                                Ok(())
+                            },
+                        )
                         .await?;
 
                         let delay = calculate_backoff(0, None, None);
@@ -460,10 +480,16 @@ async fn apply_stellar_node(
                             name,
                             health_result.summary()
                         );
-                        apply_or_emit(ctx, node, ActionType::Update, "Status (Archive Health Passed)", async {
-                            update_archive_health_status(client, node, &health_result).await?;
-                            Ok(())
-                        })
+                        apply_or_emit(
+                            ctx,
+                            node,
+                            ActionType::Update,
+                            "Status (Archive Health Passed)",
+                            async {
+                                update_archive_health_status(client, node, &health_result).await?;
+                                Ok(())
+                            },
+                        )
                         .await?;
                     }
                 }
@@ -521,7 +547,8 @@ async fn apply_stellar_node(
 
     // 3. Create/update the ConfigMap for node configuration
     apply_or_emit(ctx, node, ActionType::Update, "ConfigMap", async {
-        resources::ensure_config_map(client, node, quorum_override.clone(), ctx.enable_mtls).await?;
+        resources::ensure_config_map(client, node, quorum_override.clone(), ctx.enable_mtls)
+            .await?;
         Ok(())
     })
     .await?;
@@ -560,58 +587,65 @@ async fn apply_stellar_node(
     .await?;
 
     // 5. Create/update the Deployment/StatefulSet based on node type
-    apply_or_emit(ctx, node, ActionType::Update, "Workload (Deployment/StatefulSet)", async {
-        match node.spec.node_type {
-            NodeType::Validator => {
-                resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
-            }
-            NodeType::Horizon | NodeType::SorobanRpc => {
-                // Handle Canary Deployment
-                if let RolloutStrategy::Canary(_) = &node.spec.strategy {
-                    // Determine if we are in a canary state
-                    let current_version = get_current_deployment_version(client, node).await?;
-                    if let Some(cv) = current_version {
-                        if cv != node.spec.version {
-                            // We have a version mismatch, ensure canary
-                            info!(
-                                "Canary version mismatch: spec={} current={}. Ensuring canary resources.",
-                                node.spec.version, cv
-                            );
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Update,
+        "Workload (Deployment/StatefulSet)",
+        async {
+            match node.spec.node_type {
+                NodeType::Validator => {
+                    resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
+                }
+                NodeType::Horizon | NodeType::SorobanRpc => {
+                    // Handle Canary Deployment
+                    if let RolloutStrategy::Canary(_) = &node.spec.strategy {
+                        // Determine if we are in a canary state
+                        let current_version = get_current_deployment_version(client, node).await?;
+                        if let Some(cv) = current_version {
+                            if cv != node.spec.version {
+                                // We have a version mismatch, ensure canary
+                                info!(
+                                    "Canary version mismatch: spec={} current={}. Ensuring canary resources.",
+                                    node.spec.version, cv
+                                );
+                            }
                         }
-                    }
 
-                    resources::ensure_canary_deployment(client, node, ctx.enable_mtls).await?;
-                    resources::ensure_canary_service(client, node, ctx.enable_mtls).await?;
+                        resources::ensure_canary_deployment(client, node, ctx.enable_mtls).await?;
+                        resources::ensure_canary_service(client, node, ctx.enable_mtls).await?;
 
-                    // For canary, the main deployment should stay at the OLD version
-                    // IF we are in the middle of a rollout.
-                    if node
-                        .status
-                        .as_ref()
-                        .and_then(|status| status.canary_version.as_ref())
-                        .is_some()
-                    {
-                        let mut stable_node = node.clone();
-                        // Recover the stable version from the existing deployment if possible
-                        if let Some(cv) = get_current_deployment_version(client, node).await? {
-                            stable_node.spec.version = cv;
+                        // For canary, the main deployment should stay at the OLD version
+                        // IF we are in the middle of a rollout.
+                        if node
+                            .status
+                            .as_ref()
+                            .and_then(|status| status.canary_version.as_ref())
+                            .is_some()
+                        {
+                            let mut stable_node = node.clone();
+                            // Recover the stable version from the existing deployment if possible
+                            if let Some(cv) = get_current_deployment_version(client, node).await? {
+                                stable_node.spec.version = cv;
+                            }
+                            resources::ensure_deployment(client, &stable_node, ctx.enable_mtls)
+                                .await?;
+                        } else {
+                            resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
                         }
-                        resources::ensure_deployment(client, &stable_node, ctx.enable_mtls).await?;
                     } else {
+                        // RPC nodes use Deployment
                         resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
-                    }
-                } else {
-                    // RPC nodes use Deployment
-                    resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
-                    info!("Deployment ensured for RPC node {}/{}", namespace, name);
+                        info!("Deployment ensured for RPC node {}/{}", namespace, name);
 
-                    // Clean up canary resources if they exist
-                    resources::delete_canary_resources(client, node).await?;
+                        // Clean up canary resources if they exist
+                        resources::delete_canary_resources(client, node).await?;
+                    }
                 }
             }
-        }
-        Ok(())
-    })
+            Ok(())
+        },
+    )
     .await?;
 
     apply_or_emit(
@@ -628,16 +662,36 @@ async fn apply_stellar_node(
     )
     .await?;
 
+    // 5a. MetalLB / LoadBalancer
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Update,
+        "MetalLB configuration",
+        async {
+            resources::ensure_metallb_config(client, node).await?;
+            resources::ensure_load_balancer_service(client, node).await?;
+            Ok(())
+        },
+    )
+    .await?;
+
     // 6. Autoscaling and Monitoring
-    apply_or_emit(ctx, node, ActionType::Update, "Monitoring and Scaling resources", async {
-        if node.spec.autoscaling.is_some() {
-            resources::ensure_service_monitor(client, node).await?;
-            resources::ensure_hpa(client, node).await?;
-        }
-        resources::ensure_alerting(client, node).await?;
-        resources::ensure_network_policy(client, node).await?;
-        Ok(())
-    })
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Update,
+        "Monitoring and Scaling resources",
+        async {
+            if node.spec.autoscaling.is_some() {
+                resources::ensure_service_monitor(client, node).await?;
+                resources::ensure_hpa(client, node).await?;
+            }
+            resources::ensure_alerting(client, node).await?;
+            resources::ensure_network_policy(client, node).await?;
+            Ok(())
+        },
+    )
     .await?;
 
     // 7. Perform health check to determine if node is ready
@@ -696,9 +750,13 @@ async fn apply_stellar_node(
     if health_result.healthy && !node.spec.suspended {
         let stale_check = remediation::check_stale_node(node, health_result.ledger_sequence);
         if stale_check.is_stale && remediation::can_remediate(node) {
-            match stale_check.recommended_action {
-                remediation::RemediationLevel::Restart => {
-                    apply_or_emit(ctx, node, ActionType::Update, "Remediation (Restart)", async {
+            if stale_check.recommended_action == remediation::RemediationLevel::Restart {
+                apply_or_emit(
+                    ctx,
+                    node,
+                    ActionType::Update,
+                    "Remediation (Restart)",
+                    async {
                         remediation::emit_remediation_event(
                             client,
                             node,
@@ -716,11 +774,10 @@ async fn apply_stellar_node(
                         )
                         .await?;
                         Ok(())
-                    })
-                    .await?;
-                    return Ok(Action::requeue(Duration::from_secs(30)));
-                }
-                _ => {}
+                    },
+                )
+                .await?;
+                return Ok(Action::requeue(Duration::from_secs(30)));
             }
         } else {
             apply_or_emit(ctx, node, ActionType::Update, "Remediation State", async {
@@ -866,6 +923,23 @@ async fn cleanup_stellar_node(
     })
     .await?;
 
+    // 3b. Delete MetalLB LoadBalancer Service
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Delete,
+        "MetalLB LoadBalancer",
+        async {
+            if let Err(e) = resources::delete_load_balancer_service(client, node).await {
+                warn!("Failed to delete MetalLB LoadBalancer service: {:?}", e);
+            }
+            if let Err(e) = resources::delete_metallb_config(client, node).await {
+                warn!("Failed to delete MetalLB configuration: {:?}", e);
+            }
+            Ok(())
+        },
+    )
+    .await?;
     // 4. Delete Service
     apply_or_emit(ctx, node, ActionType::Delete, "Service", async {
         if let Err(e) = resources::delete_service(client, node).await {
