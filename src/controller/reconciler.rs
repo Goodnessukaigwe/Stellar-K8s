@@ -47,13 +47,12 @@ use super::conditions;
 use super::dr;
 use super::finalizers::STELLAR_NODE_FINALIZER;
 use super::health;
+#[cfg(feature = "metrics")]
+use super::metrics;
 use super::mtls;
 use super::remediation;
 use super::resources;
-#[cfg(feature = "metrics")]
-use super::metrics;
 use super::vsl;
-
 
 // Constants
 #[allow(dead_code)]
@@ -287,37 +286,49 @@ async fn apply_stellar_node(
 
     // 2. Handle suspension
     if node.spec.suspended {
-        apply_or_emit(ctx, node, ActionType::Update, "Suspended state resources", async {
-            resources::ensure_pvc(client, node).await?;
-            resources::ensure_config_map(client, node, None, ctx.enable_mtls).await?;
+        apply_or_emit(
+            ctx,
+            node,
+            ActionType::Update,
+            "Suspended state resources",
+            async {
+                resources::ensure_pvc(client, node).await?;
+                resources::ensure_config_map(client, node, None, ctx.enable_mtls).await?;
 
-            match node.spec.node_type {
-                NodeType::Validator => {
-                    resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
+                match node.spec.node_type {
+                    NodeType::Validator => {
+                        resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
+                    }
+                    NodeType::Horizon | NodeType::SorobanRpc => {
+                        resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
+                    }
                 }
-                NodeType::Horizon | NodeType::SorobanRpc => {
-                    resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
-                }
-            }
 
-            resources::ensure_service(client, node, ctx.enable_mtls).await?;
-            Ok(())
-        })
+                resources::ensure_service(client, node, ctx.enable_mtls).await?;
+                Ok(())
+            },
+        )
         .await?;
 
-        apply_or_emit(ctx, node, ActionType::Update, "Status (Maintenance)", async {
-            update_status(
-                client,
-                node,
-                "Maintenance",
-                Some("Manual maintenance mode active; workload management paused"),
-                0,
-                true,
-            )
-            .await?;
-            update_suspended_status(client, node).await?;
-            Ok(())
-        })
+        apply_or_emit(
+            ctx,
+            node,
+            ActionType::Update,
+            "Status (Maintenance)",
+            async {
+                update_status(
+                    client,
+                    node,
+                    "Maintenance",
+                    Some("Manual maintenance mode active; workload management paused"),
+                    0,
+                    true,
+                )
+                .await?;
+                update_suspended_status(client, node).await?;
+                Ok(())
+            },
+        )
         .await?;
 
         return Ok(Action::requeue(Duration::from_secs(60)));
@@ -416,10 +427,16 @@ async fn apply_stellar_node(
                         .await?;
 
                         // Update status with archive health condition (observed_generation NOT updated to trigger retry)
-                        apply_or_emit(ctx, node, ActionType::Update, "Status (Archive Health Failed)", async {
-                            update_archive_health_status(client, node, &health_result).await?;
-                            Ok(())
-                        })
+                        apply_or_emit(
+                            ctx,
+                            node,
+                            ActionType::Update,
+                            "Status (Archive Health Failed)",
+                            async {
+                                update_archive_health_status(client, node, &health_result).await?;
+                                Ok(())
+                            },
+                        )
                         .await?;
 
                         let delay = calculate_backoff(0, None, None);
@@ -436,10 +453,16 @@ async fn apply_stellar_node(
                             name,
                             health_result.summary()
                         );
-                        apply_or_emit(ctx, node, ActionType::Update, "Status (Archive Health Passed)", async {
-                            update_archive_health_status(client, node, &health_result).await?;
-                            Ok(())
-                        })
+                        apply_or_emit(
+                            ctx,
+                            node,
+                            ActionType::Update,
+                            "Status (Archive Health Passed)",
+                            async {
+                                update_archive_health_status(client, node, &health_result).await?;
+                                Ok(())
+                            },
+                        )
                         .await?;
                     }
                 }
@@ -497,7 +520,8 @@ async fn apply_stellar_node(
 
     // 3. Create/update the ConfigMap for node configuration
     apply_or_emit(ctx, node, ActionType::Update, "ConfigMap", async {
-        resources::ensure_config_map(client, node, quorum_override.clone(), ctx.enable_mtls).await?;
+        resources::ensure_config_map(client, node, quorum_override.clone(), ctx.enable_mtls)
+            .await?;
         Ok(())
     })
     .await?;
@@ -536,44 +560,68 @@ async fn apply_stellar_node(
     .await?;
 
     // 5. Create/update the Deployment/StatefulSet based on node type
-    apply_or_emit(ctx, node, ActionType::Update, "Workload (Deployment/StatefulSet)", async {
-        match node.spec.node_type {
-            NodeType::Validator => {
-                resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Update,
+        "Workload (Deployment/StatefulSet)",
+        async {
+            match node.spec.node_type {
+                NodeType::Validator => {
+                    resources::ensure_statefulset(client, node, ctx.enable_mtls).await?;
+                }
+                NodeType::Horizon | NodeType::SorobanRpc => {
+                    resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
+                }
             }
-            NodeType::Horizon | NodeType::SorobanRpc => {
-                resources::ensure_deployment(client, node, ctx.enable_mtls).await?;
-            }
-        }
-        Ok(())
-    })
+            Ok(())
+        },
+    )
     .await?;
 
-    apply_or_emit(ctx, node, ActionType::Update, "Service and Ingress", async {
-        resources::ensure_service(client, node, ctx.enable_mtls).await?;
-        resources::ensure_ingress(client, node).await?;
-        Ok(())
-    })
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Update,
+        "Service and Ingress",
+        async {
+            resources::ensure_service(client, node, ctx.enable_mtls).await?;
+            resources::ensure_ingress(client, node).await?;
+            Ok(())
+        },
+    )
     .await?;
 
     // 5a. MetalLB / LoadBalancer
-    apply_or_emit(ctx, node, ActionType::Update, "MetalLB configuration", async {
-        resources::ensure_metallb_config(client, node).await?;
-        resources::ensure_load_balancer_service(client, node).await?;
-        Ok(())
-    })
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Update,
+        "MetalLB configuration",
+        async {
+            resources::ensure_metallb_config(client, node).await?;
+            resources::ensure_load_balancer_service(client, node).await?;
+            Ok(())
+        },
+    )
     .await?;
 
     // 6. Autoscaling and Monitoring
-    apply_or_emit(ctx, node, ActionType::Update, "Monitoring and Scaling resources", async {
-        if node.spec.autoscaling.is_some() {
-            resources::ensure_service_monitor(client, node).await?;
-            resources::ensure_hpa(client, node).await?;
-        }
-        resources::ensure_alerting(client, node).await?;
-        resources::ensure_network_policy(client, node).await?;
-        Ok(())
-    })
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Update,
+        "Monitoring and Scaling resources",
+        async {
+            if node.spec.autoscaling.is_some() {
+                resources::ensure_service_monitor(client, node).await?;
+                resources::ensure_hpa(client, node).await?;
+            }
+            resources::ensure_alerting(client, node).await?;
+            resources::ensure_network_policy(client, node).await?;
+            Ok(())
+        },
+    )
     .await?;
 
     // 7. Health Check
@@ -627,9 +675,13 @@ async fn apply_stellar_node(
     if health_result.healthy && !node.spec.suspended {
         let stale_check = remediation::check_stale_node(node, health_result.ledger_sequence);
         if stale_check.is_stale && remediation::can_remediate(node) {
-            match stale_check.recommended_action {
-                remediation::RemediationLevel::Restart => {
-                    apply_or_emit(ctx, node, ActionType::Update, "Remediation (Restart)", async {
+            if stale_check.recommended_action == remediation::RemediationLevel::Restart {
+                apply_or_emit(
+                    ctx,
+                    node,
+                    ActionType::Update,
+                    "Remediation (Restart)",
+                    async {
                         remediation::emit_remediation_event(
                             client,
                             node,
@@ -647,11 +699,10 @@ async fn apply_stellar_node(
                         )
                         .await?;
                         Ok(())
-                    })
-                    .await?;
-                    return Ok(Action::requeue(Duration::from_secs(30)));
-                }
-                _ => {}
+                    },
+                )
+                .await?;
+                return Ok(Action::requeue(Duration::from_secs(30)));
             }
         } else {
             apply_or_emit(ctx, node, ActionType::Update, "Remediation State", async {
@@ -786,15 +837,21 @@ async fn cleanup_stellar_node(
     .await?;
 
     // 3b. Delete MetalLB LoadBalancer Service
-    apply_or_emit(ctx, node, ActionType::Delete, "MetalLB LoadBalancer", async {
-        if let Err(e) = resources::delete_load_balancer_service(client, node).await {
-            warn!("Failed to delete MetalLB LoadBalancer service: {:?}", e);
-        }
-        if let Err(e) = resources::delete_metallb_config(client, node).await {
-            warn!("Failed to delete MetalLB configuration: {:?}", e);
-        }
-        Ok(())
-    })
+    apply_or_emit(
+        ctx,
+        node,
+        ActionType::Delete,
+        "MetalLB LoadBalancer",
+        async {
+            if let Err(e) = resources::delete_load_balancer_service(client, node).await {
+                warn!("Failed to delete MetalLB LoadBalancer service: {:?}", e);
+            }
+            if let Err(e) = resources::delete_metallb_config(client, node).await {
+                warn!("Failed to delete MetalLB configuration: {:?}", e);
+            }
+            Ok(())
+        },
+    )
     .await?;
 
     // 4. Delete Service
