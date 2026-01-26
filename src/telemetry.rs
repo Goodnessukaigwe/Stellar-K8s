@@ -3,13 +3,13 @@
 //! Provides functions to set up distributed tracing with OTLP export.
 
 use opentelemetry::{global, KeyValue};
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{
+use opentelemetry::{
     propagation::TraceContextPropagator,
     runtime,
     trace::{self, Sampler},
     Resource,
 };
+use opentelemetry_otlp::WithExportConfig;
 use std::env;
 use tracing_subscriber::{registry::LookupSpan, Layer};
 

@@ -239,7 +239,7 @@ async fn check_horizon_health(
         let mut identity_pem = config.cert_pem.clone();
         identity_pem.extend_from_slice(&config.key_pem);
 
-        let identity = reqwest::Identity::from_pem(&identity_pem)
+        let identity = reqwest::Identity::from(identity_pem.clone())
             .map_err(|e| Error::ConfigError(format!("Failed to create identity: {}", e)))?;
 
         let ca_cert = reqwest::Certificate::from_pem(&config.ca_pem)
@@ -339,7 +339,7 @@ async fn check_soroban_health(
         let mut identity_pem = config.cert_pem.clone();
         identity_pem.extend_from_slice(&config.key_pem);
 
-        let identity = reqwest::Identity::from_pem(&identity_pem)
+        let identity = reqwest::Identity::from(identity_pem.clone())
             .map_err(|e| Error::ConfigError(format!("Failed to create identity: {}", e)))?;
 
         let ca_cert = reqwest::Certificate::from_pem(&config.ca_pem)
