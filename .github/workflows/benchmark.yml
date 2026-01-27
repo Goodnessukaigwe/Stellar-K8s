@@ -3,8 +3,6 @@ name: Performance Benchmark
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       baseline_version:
@@ -17,7 +15,7 @@ on:
         default: "10"
 
 # Benchmark tests require running operator + K8s cluster
-# Failures are informational only - they don't block PRs
+# Only runs on main branch pushes or manual trigger (not on PRs)
 
 env:
   CARGO_TERM_COLOR: always
