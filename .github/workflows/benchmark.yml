@@ -16,6 +16,9 @@ on:
         required: false
         default: "10"
 
+# Benchmark tests require running operator + K8s cluster
+# Failures are informational only - they don't block PRs
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -87,6 +90,7 @@ jobs:
         run: chmod +x target/release/stellar-operator
 
       - name: Run benchmarks
+        continue-on-error: true # Don't fail CI if operator isn't running
         run: |
           mkdir -p results
           k6 run --out json=results/benchmark-raw.json benchmarks/k6/operator-load-test.js
