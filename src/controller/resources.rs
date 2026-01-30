@@ -1054,7 +1054,7 @@ spec:
                 bgp_cfg
                     .bfd_profile
                     .as_ref()
-                    .map(|p| format!("  bfdProfile: {}", p))
+                    .map(|p| format!("  bfdProfile: {p}"))
                     .unwrap_or_default()
             } else {
                 String::new()
@@ -1879,7 +1879,7 @@ fn build_container(node: &StellarNode, enable_mtls: bool) -> Container {
             value: None,
             value_from: Some(EnvVarSource {
                 secret_key_ref: Some(SecretKeySelector {
-                    name: Some(format!("{}-app", secret_name)),
+                    name: Some(format!("{secret_name}-app")),
                     key: "uri".to_string(),
                     ..Default::default()
                 }),
