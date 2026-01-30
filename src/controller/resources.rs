@@ -1242,7 +1242,10 @@ pub async fn ensure_cnpg_cluster(client: &Client, node: &StellarNode) -> Result<
 
 fn build_cnpg_cluster(node: &StellarNode, config: &ManagedDatabaseConfig) -> Cluster {
     let mut labels = standard_labels(node);
-    labels.insert("app.kubernetes.io/managed-by".to_string(), "cnpg".to_string());
+    labels.insert(
+        "app.kubernetes.io/managed-by".to_string(),
+        "cnpg".to_string(),
+    );
     let name = node.name_any();
 
     let mut cluster = Cluster {
@@ -2703,4 +2706,3 @@ pub async fn delete_pdb(client: &Client, node: &StellarNode) -> Result<()> {
 
     Ok(())
 }
-

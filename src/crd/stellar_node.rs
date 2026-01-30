@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use super::types::{
     AutoscalingConfig, Condition, CrossClusterConfig, DisasterRecoveryConfig,
     DisasterRecoveryStatus, ExternalDatabaseConfig, GlobalDiscoveryConfig, HistoryMode,
-    HorizonConfig, IngressConfig, LoadBalancerConfig, NetworkPolicyConfig, NodeType,
-    ResourceRequirements, RetentionPolicy, RolloutStrategy, SorobanConfig, StellarNetwork,
-    StorageConfig, ValidatorConfig, ManagedDatabaseConfig,
+    HorizonConfig, IngressConfig, LoadBalancerConfig, ManagedDatabaseConfig, NetworkPolicyConfig,
+    NodeType, ResourceRequirements, RetentionPolicy, RolloutStrategy, SorobanConfig,
+    StellarNetwork, StorageConfig, ValidatorConfig,
 };
 
 /// Structured validation error for `StellarNodeSpec`
