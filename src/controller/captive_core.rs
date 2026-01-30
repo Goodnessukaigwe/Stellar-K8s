@@ -204,7 +204,6 @@ mod tests {
                 network: StellarNetwork::Testnet,
                 version: "v21.0.0".to_string(),
                 history_mode: Default::default(),
-                resource_meta: None,
                 resources: crate::crd::ResourceRequirements {
                     requests: crate::crd::ResourceSpec {
                         cpu: "500m".to_string(),
@@ -237,17 +236,20 @@ mod tests {
                 suspended: false,
                 alerting: false,
                 database: None,
+                // Added this field to resolve the E0063 error
+                managed_database: None,
                 autoscaling: None,
                 ingress: None,
                 strategy: Default::default(),
                 maintenance_mode: false,
                 network_policy: None,
-                dr_config: None,
-                topology_spread_constraints: None,
                 load_balancer: None,
                 global_discovery: None,
-                cluster: None,
                 cross_cluster: None,
+                cluster: None,
+                dr_config: None,
+                topology_spread_constraints: None,
+                resource_meta: None,
             },
             status: None,
         }
