@@ -34,10 +34,9 @@ use tracing::{info, instrument, warn};
 
 use crate::crd::{
     BackupConfiguration, BarmanObjectStore, BootstrapConfiguration, Cluster, ClusterSpec,
-    HistoryMode, HsmProvider, IngressConfig, InitDbConfiguration, KeySource,
-    ManagedDatabaseConfig, MonitoringConfiguration,
-    NetworkPolicyConfig, NodeType, PgBouncerSpec, Pooler, PoolerCluster, PoolerSpec,
-    PostgresConfiguration, RolloutStrategy, S3Credentials,
+    HistoryMode, HsmProvider, IngressConfig, InitDbConfiguration, KeySource, ManagedDatabaseConfig,
+    MonitoringConfiguration, NetworkPolicyConfig, NodeType, PgBouncerSpec, Pooler, PoolerCluster,
+    PoolerSpec, PostgresConfiguration, RolloutStrategy, S3Credentials,
     SecretKeySelector as CnpgSecretKeySelector, StellarNode, StorageConfiguration,
     WalBackupConfiguration,
 };
