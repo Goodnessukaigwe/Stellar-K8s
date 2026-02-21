@@ -194,6 +194,7 @@ impl StellarNodeSpec {
     /// # network_policy: None,
     /// # dr_config: None,
     /// # topology_spread_constraints: None,
+    /// # cve_handling: None,
     /// # resource_meta: None,
     /// };
     /// match spec.validate() {
@@ -282,35 +283,6 @@ impl StellarNodeSpec {
                         "spec.strategy",
                         "Canary rollout is not supported for Validator nodes",
                         "Use a non-canary rollout strategy (e.g., RollingUpdate) for Validator nodes.",
-
-                // Autoscaling not supported
-                if self.autoscaling.is_some() {
-                    errors.push(SpecValidationError::new(
-                        "spec.autoscaling",
-                        "autoscaling is not supported for Validator nodes",
-                        "Remove spec.autoscaling when nodeType is Validator; autoscaling is only supported for Horizon and SorobanRpc.",
-                    ));
-                }
-
-                // History archive validation
-                if let Some(ref validator_config) = self.validator_config {
-                    if validator_config.enable_history_archive
-                        && validator_config.history_archive_urls.is_empty()
-                    {
-                        errors.push(SpecValidationError::new(
-                            "spec.validatorConfig.historyArchiveUrls",
-                            "historyArchiveUrls must not be empty when enableHistoryArchive is true",
-                            "Provide at least one valid history archive URL in spec.validatorConfig.historyArchiveUrls when enableHistoryArchive is true.",
-                        ));
-                    }
-                }
-
-                // Canary strategy not supported
-                if matches!(self.strategy, RolloutStrategy::Canary(_)) {
-                    errors.push(SpecValidationError::new(
-                        "spec.strategy",
-                        "canary rollout strategy is not supported for Validator nodes",
-                        "Use RollingUpdate strategy for Validator nodes; canary is only supported for Horizon and SorobanRpc.",
                     ));
                 }
             }
@@ -981,8 +953,6 @@ mod tests {
             network_policy: None,
             dr_config: None,
             topology_spread_constraints: None,
-            load_balancer: None,
-            global_discovery: None,
             cross_cluster: None,
             cve_handling: None,
             resource_meta: None,
