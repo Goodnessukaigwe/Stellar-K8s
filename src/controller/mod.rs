@@ -17,6 +17,8 @@ mod finalizers;
 mod health;
 #[cfg(test)]
 mod health_test;
+#[cfg(test)]
+mod peer_discovery_test;
 #[cfg(feature = "metrics")]
 pub mod metrics;
 pub mod mtls;
