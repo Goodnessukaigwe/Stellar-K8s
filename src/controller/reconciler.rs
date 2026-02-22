@@ -74,6 +74,7 @@ pub struct ControllerState {
     pub operator_namespace: String,
     pub mtls_config: Option<crate::MtlsConfig>,
     pub dry_run: bool,
+    pub is_leader: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Main entry point to start the controller
@@ -97,6 +98,7 @@ pub struct ControllerState {
 ///
 /// ```rust,no_run
 /// use std::sync::Arc;
+/// use std::sync::atomic::AtomicBool;
 /// use stellar_k8s::controller::{ControllerState, run_controller};
 /// use kube::Client;
 ///
@@ -109,6 +111,7 @@ pub struct ControllerState {
 ///         mtls_config: None,
 ///         operator_namespace: "stellar-operator".to_string(),
 ///         dry_run: false,
+///         is_leader: Arc::new(AtomicBool::new(true)),
 ///     });
 ///     run_controller(state).await?;
 ///     Ok(())
@@ -261,6 +264,11 @@ where
 /// - The requeue timer expires
 #[instrument(skip(ctx), fields(name = %obj.name_any(), namespace = obj.namespace()))]
 async fn reconcile(obj: Arc<StellarNode>, ctx: Arc<ControllerState>) -> Result<Action> {
+    if !ctx.is_leader.load(std::sync::atomic::Ordering::Relaxed) {
+        debug!("Not the leader, skipping reconciliation");
+        return Ok(Action::requeue(Duration::from_secs(5)));
+    }
+
     let client = ctx.client.clone();
     let namespace = obj.namespace().unwrap_or_else(|| "default".to_string());
     let api: Api<StellarNode> = Api::namespaced(client.clone(), &namespace);
