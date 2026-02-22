@@ -59,6 +59,13 @@ pub struct HealthResponse {
     pub version: String,
 }
 
+/// Leader status response
+#[derive(Debug, Serialize)]
+pub struct LeaderResponse {
+    pub is_leader: bool,
+    pub holder_id: String,
+}
+
 /// Error response
 #[derive(Debug, Serialize)]
 pub struct ErrorResponse {

@@ -14,7 +14,8 @@ use crate::controller::ControllerState;
 use crate::crd::StellarNode;
 
 use super::dto::{
-    ErrorResponse, HealthResponse, NodeDetailResponse, NodeListResponse, NodeSummary,
+    ErrorResponse, HealthResponse, LeaderResponse, NodeDetailResponse, NodeListResponse,
+    NodeSummary,
 };
 
 /// Health check endpoint
@@ -23,6 +24,19 @@ pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "healthy".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
+    })
+}
+
+/// Leader status endpoint - returns whether this replica is the active leader
+#[instrument(skip(state))]
+pub async fn leader_status(State(state): State<Arc<ControllerState>>) -> Json<LeaderResponse> {
+    let is_leader = state.is_leader.load(std::sync::atomic::Ordering::Relaxed);
+    let holder_id = std::env::var("HOSTNAME")
+        .or_else(|_| hostname::get().map(|h| h.to_string_lossy().to_string()))
+        .unwrap_or_else(|_| "unknown".to_string());
+    Json(LeaderResponse {
+        is_leader,
+        holder_id,
     })
 }
 

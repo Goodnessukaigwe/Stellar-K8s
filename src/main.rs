@@ -1,7 +1,13 @@
-use clap::{Parser, Subcommand};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+use chrono::Utc;
+use clap::{Parser, Subcommand};
+use k8s_openapi::api::coordination::v1::Lease;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::MicroTime;
+use kube::api::{Api, ObjectMeta, Patch, PatchParams, PostParams};
 use stellar_k8s::{controller, crd::StellarNode, Error};
-use tracing::{info, Level};
+use tracing::{info, warn, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[derive(Parser, Debug)]
@@ -192,19 +198,29 @@ async fn run_operator(args: RunArgs) -> Result<(), Error> {
         None
     };
     // Leader election configuration
-    let _namespace = std::env::var("POD_NAMESPACE").unwrap_or_else(|_| "default".to_string());
-    let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| {
+    let leader_namespace =
+        std::env::var("POD_NAMESPACE").unwrap_or_else(|_| args.namespace.clone());
+    let holder_identity = std::env::var("HOSTNAME").unwrap_or_else(|_| {
         hostname::get()
             .ok()
             .and_then(|h| h.into_string().ok())
             .unwrap_or_else(|| "unknown-host".to_string())
     });
 
-    info!("Leader election using holder ID: {}", hostname);
+    info!("Leader election using holder ID: {}", holder_identity);
 
-    // TODO: Re-enable leader election once kube-leader-election version is aligned
-    // let lease_name = "stellar-operator-leader";
-    // let lock = LeaseLock::new(...);
+    let is_leader = Arc::new(AtomicBool::new(false));
+
+    {
+        let lease_client = client.clone();
+        let lease_ns = leader_namespace.clone();
+        let identity = holder_identity.clone();
+        let is_leader_bg = Arc::clone(&is_leader);
+
+        tokio::spawn(async move {
+            run_leader_election(lease_client, &lease_ns, &identity, is_leader_bg).await;
+        });
+    }
 
     // Create shared controller state
     let state = Arc::new(controller::ControllerState {
@@ -213,6 +229,7 @@ async fn run_operator(args: RunArgs) -> Result<(), Error> {
         operator_namespace: args.namespace.clone(),
         mtls_config: mtls_config.clone(),
         dry_run: args.dry_run,
+        is_leader: Arc::clone(&is_leader),
     });
 
     // Start the peer discovery manager
@@ -246,4 +263,125 @@ async fn run_operator(args: RunArgs) -> Result<(), Error> {
     stellar_k8s::telemetry::shutdown_telemetry();
 
     result
+}
+
+const LEASE_NAME: &str = "stellar-operator-leader";
+const LEASE_DURATION_SECS: i32 = 15;
+const RENEW_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
+const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+async fn run_leader_election(
+    client: kube::Client,
+    namespace: &str,
+    identity: &str,
+    is_leader: Arc<AtomicBool>,
+) {
+    let leases: Api<Lease> = Api::namespaced(client, namespace);
+
+    loop {
+        match try_acquire_or_renew(&leases, identity).await {
+            Ok(true) => {
+                if !is_leader.load(Ordering::Relaxed) {
+                    info!("Acquired leadership for lease {}", LEASE_NAME);
+                }
+                is_leader.store(true, Ordering::Relaxed);
+                tokio::time::sleep(RENEW_INTERVAL).await;
+            }
+            Ok(false) => {
+                if is_leader.load(Ordering::Relaxed) {
+                    warn!("Lost leadership for lease {}", LEASE_NAME);
+                }
+                is_leader.store(false, Ordering::Relaxed);
+                tokio::time::sleep(RETRY_INTERVAL).await;
+            }
+            Err(e) => {
+                warn!("Leader election error: {:?}", e);
+                is_leader.store(false, Ordering::Relaxed);
+                tokio::time::sleep(RETRY_INTERVAL).await;
+            }
+        }
+    }
+}
+
+async fn try_acquire_or_renew(leases: &Api<Lease>, identity: &str) -> Result<bool, kube::Error> {
+    let now = Utc::now();
+
+    match leases.get(LEASE_NAME).await {
+        Ok(existing) => {
+            let spec = existing.spec.as_ref();
+            let current_holder = spec.and_then(|s| s.holder_identity.as_deref());
+
+            if current_holder == Some(identity) {
+                let patch = serde_json::json!({
+                    "spec": {
+                        "renewTime": MicroTime(now),
+                        "leaseDurationSeconds": LEASE_DURATION_SECS,
+                    }
+                });
+                leases
+                    .patch(LEASE_NAME, &PatchParams::default(), &Patch::Merge(&patch))
+                    .await?;
+                return Ok(true);
+            }
+
+            let expired = spec
+                .and_then(|s| s.renew_time.as_ref())
+                .map(|renew| {
+                    let duration = spec
+                        .and_then(|s| s.lease_duration_seconds)
+                        .unwrap_or(LEASE_DURATION_SECS);
+                    let expiry = renew.0 + chrono::Duration::seconds(duration as i64);
+                    now > expiry
+                })
+                .unwrap_or(true);
+
+            if expired {
+                info!(
+                    "Lease held by {:?} has expired, taking over",
+                    current_holder
+                );
+                let patch = serde_json::json!({
+                    "spec": {
+                        "holderIdentity": identity,
+                        "acquireTime": MicroTime(now),
+                        "renewTime": MicroTime(now),
+                        "leaseDurationSeconds": LEASE_DURATION_SECS,
+                    }
+                });
+                leases
+                    .patch(LEASE_NAME, &PatchParams::default(), &Patch::Merge(&patch))
+                    .await?;
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+        Err(kube::Error::Api(err)) if err.code == 404 => {
+            let lease = Lease {
+                metadata: ObjectMeta {
+                    name: Some(LEASE_NAME.to_string()),
+                    namespace: Some(
+                        leases
+                            .resource_url()
+                            .split('/')
+                            .nth(5)
+                            .unwrap_or("default")
+                            .to_string(),
+                    ),
+                    ..Default::default()
+                },
+                spec: Some(k8s_openapi::api::coordination::v1::LeaseSpec {
+                    holder_identity: Some(identity.to_string()),
+                    acquire_time: Some(MicroTime(now)),
+                    renew_time: Some(MicroTime(now)),
+                    lease_duration_seconds: Some(LEASE_DURATION_SECS),
+                    ..Default::default()
+                }),
+            };
+            leases.create(&PostParams::default(), &lease).await?;
+            info!("Created lease {} with holder {}", LEASE_NAME, identity);
+            Ok(true)
+        }
+        Err(e) => Err(e),
+    }
 }

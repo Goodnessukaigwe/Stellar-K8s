@@ -33,6 +33,7 @@ pub async fn run_server(
 ) -> Result<()> {
     let app = Router::new()
         .route("/health", get(handlers::health))
+        .route("/leader", get(handlers::leader_status))
         .route("/metrics", get(metrics_handler))
         .route("/api/v1/nodes", get(handlers::list_nodes))
         .route("/api/v1/nodes/:namespace/:name", get(handlers::get_node))
