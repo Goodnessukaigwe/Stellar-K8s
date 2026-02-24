@@ -408,4 +408,353 @@ mod tests {
         assert!(toml.contains("# Additional custom configuration"));
         assert!(toml.contains("MAX_CONCURRENT_SUBPROCESSES=10"));
     }
+
+    /// Test that updating the config spec produces different TOML output
+    #[test]
+    fn test_config_update_produces_different_output() {
+        // Initial configuration
+        let config1 = CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec!["https://archive1.example.com".to_string()],
+            peer_port: None,
+            http_port: None,
+            log_level: Some("info".to_string()),
+            additional_config: None,
+        };
+
+        let node1 = create_test_node(config1);
+        let builder1 = CaptiveCoreConfigBuilder::from_node_config(&node1).unwrap();
+        let toml1 = builder1.build_toml().unwrap();
+
+        // Updated configuration with different values
+        let config2 = CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec![
+                "https://archive1.example.com".to_string(),
+                "https://archive2.example.com".to_string(),
+            ],
+            peer_port: Some(11700),
+            http_port: Some(11701),
+            log_level: Some("debug".to_string()),
+            additional_config: Some("NODE_SEED=\"SXYZ\"".to_string()),
+        };
+
+        let node2 = create_test_node(config2);
+        let builder2 = CaptiveCoreConfigBuilder::from_node_config(&node2).unwrap();
+        let toml2 = builder2.build_toml().unwrap();
+
+        // Verify the outputs are different
+        assert_ne!(toml1, toml2);
+
+        // Verify specific changes
+        assert!(!toml1.contains("archive2"));
+        assert!(toml2.contains("archive2"));
+
+        assert!(toml1.contains("PEER_PORT=11625"));
+        assert!(toml2.contains("PEER_PORT=11700"));
+
+        assert!(toml1.contains("LOG_LEVEL=\"info\""));
+        assert!(toml2.contains("LOG_LEVEL=\"debug\""));
+
+        assert!(!toml1.contains("NODE_SEED"));
+        assert!(toml2.contains("NODE_SEED=\"SXYZ\""));
+    }
+
+    /// Test that Mainnet and Testnet produce different network passphrases
+    #[test]
+    fn test_network_specific_settings_mainnet_vs_testnet() {
+        // Testnet configuration
+        let testnet_config = CaptiveCoreConfig {
+            network_passphrase: None, // Will use default from network
+            history_archive_urls: vec![
+                "https://history.stellar.org/prd/core-testnet/core_testnet_001".to_string(),
+            ],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        };
+        let mut testnet_node = create_test_node(testnet_config);
+        testnet_node.spec.network = StellarNetwork::Testnet;
+
+        let testnet_builder = CaptiveCoreConfigBuilder::from_node_config(&testnet_node).unwrap();
+        let testnet_toml = testnet_builder.build_toml().unwrap();
+
+        // Mainnet configuration
+        let mainnet_config = CaptiveCoreConfig {
+            network_passphrase: None, // Will use default from network
+            history_archive_urls: vec![
+                "https://history.stellar.org/prd/core-live/core_live_001".to_string()
+            ],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        };
+        let mut mainnet_node = create_test_node(mainnet_config);
+        mainnet_node.spec.network = StellarNetwork::Mainnet;
+
+        let mainnet_builder = CaptiveCoreConfigBuilder::from_node_config(&mainnet_node).unwrap();
+        let mainnet_toml = mainnet_builder.build_toml().unwrap();
+
+        // Verify different network passphrases
+        assert!(testnet_toml.contains("NETWORK_PASSPHRASE=\"Test SDF Network ; September 2015\""));
+        assert!(mainnet_toml
+            .contains("NETWORK_PASSPHRASE=\"Public Global Stellar Network ; September 2015\""));
+
+        // Verify different archive URLs
+        assert!(testnet_toml.contains("core-testnet"));
+        assert!(mainnet_toml.contains("core-live"));
+
+        // Ensure they're not the same
+        assert_ne!(testnet_toml, mainnet_toml);
+    }
+
+    /// Test Futurenet network configuration
+    #[test]
+    fn test_futurenet_network_configuration() {
+        let config = CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec![
+                "https://history.stellar.org/prd/core-futurenet/core_futurenet_001".to_string(),
+            ],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        };
+
+        let mut node = create_test_node(config);
+        node.spec.network = StellarNetwork::Futurenet;
+
+        let builder = CaptiveCoreConfigBuilder::from_node_config(&node).unwrap();
+        let toml = builder.build_toml().unwrap();
+
+        assert!(toml.contains("NETWORK_PASSPHRASE=\"Test SDF Future Network ; October 2022\""));
+        assert!(toml.contains("core-futurenet"));
+    }
+
+    /// Test custom network configuration
+    #[test]
+    fn test_custom_network_configuration() {
+        let custom_passphrase = "My Custom Network ; January 2026";
+
+        let config = CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec!["https://custom-archive.example.com".to_string()],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        };
+
+        let mut node = create_test_node(config);
+        node.spec.network = StellarNetwork::Custom(custom_passphrase.to_string());
+
+        let builder = CaptiveCoreConfigBuilder::from_node_config(&node).unwrap();
+        let toml = builder.build_toml().unwrap();
+
+        assert!(toml.contains(&format!("NETWORK_PASSPHRASE=\"{}\"", custom_passphrase)));
+    }
+
+    /// Test handling missing optional fields (all defaults)
+    #[test]
+    fn test_missing_optional_fields_use_defaults() {
+        let config = CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec!["https://archive.example.com".to_string()],
+            peer_port: None,         // Should default to 11625
+            http_port: None,         // Should default to 11626
+            log_level: None,         // Should default to "info"
+            additional_config: None, // Should be omitted
+        };
+
+        let node = create_test_node(config);
+        let builder = CaptiveCoreConfigBuilder::from_node_config(&node).unwrap();
+
+        // Verify defaults are applied
+        assert_eq!(builder.peer_port, DEFAULT_PEER_PORT);
+        assert_eq!(builder.http_port, DEFAULT_HTTP_PORT);
+        assert_eq!(builder.log_level, DEFAULT_LOG_LEVEL);
+        assert!(builder.additional_config.is_none());
+
+        // Verify the TOML contains defaults
+        let toml = builder.build_toml().unwrap();
+        assert!(toml.contains("PEER_PORT=11625"));
+        assert!(toml.contains("HTTP_PORT=11626"));
+        assert!(toml.contains("LOG_LEVEL=\"info\""));
+        assert!(!toml.contains("# Additional custom configuration"));
+    }
+
+    /// Test handling missing soroban_config entirely
+    #[test]
+    fn test_missing_soroban_config_returns_error() {
+        let mut node = create_test_node(CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec!["https://archive.example.com".to_string()],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        });
+
+        // Remove soroban config entirely
+        node.spec.soroban_config = None;
+
+        let result = CaptiveCoreConfigBuilder::from_node_config(&node);
+
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("SorobanConfig is required"));
+    }
+
+    /// Test handling missing captive_core_structured_config
+    #[test]
+    fn test_missing_captive_core_structured_config_returns_error() {
+        let mut node = create_test_node(CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec!["https://archive.example.com".to_string()],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        });
+
+        // Remove structured config
+        if let Some(ref mut soroban) = node.spec.soroban_config {
+            soroban.captive_core_structured_config = None;
+        }
+
+        let result = CaptiveCoreConfigBuilder::from_node_config(&node);
+
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("No structured Captive Core configuration provided"));
+    }
+
+    /// Test network passphrase override takes precedence
+    #[test]
+    fn test_network_passphrase_override() {
+        let custom_passphrase = "Override Passphrase ; Test 2026";
+
+        let config = CaptiveCoreConfig {
+            network_passphrase: Some(custom_passphrase.to_string()),
+            history_archive_urls: vec!["https://archive.example.com".to_string()],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        };
+
+        let mut node = create_test_node(config);
+        node.spec.network = StellarNetwork::Testnet; // This should be overridden
+
+        let builder = CaptiveCoreConfigBuilder::from_node_config(&node).unwrap();
+        let toml = builder.build_toml().unwrap();
+
+        // Should use override, not Testnet passphrase
+        assert!(toml.contains(&format!("NETWORK_PASSPHRASE=\"{}\"", custom_passphrase)));
+        assert!(!toml.contains("Test SDF Network"));
+    }
+
+    /// Test TOML format with multiple archives
+    #[test]
+    fn test_toml_format_multiple_archives() {
+        let config = CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec![
+                "https://archive1.example.com".to_string(),
+                "https://archive2.example.com".to_string(),
+                "https://archive3.example.com".to_string(),
+            ],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        };
+
+        let node = create_test_node(config);
+        let builder = CaptiveCoreConfigBuilder::from_node_config(&node).unwrap();
+        let toml = builder.build_toml().unwrap();
+
+        // Verify all archives are present with correct naming
+        assert!(toml.contains("[HISTORY.archive1]"));
+        assert!(toml.contains("curl -sf https://archive1.example.com/{0} -o {1}"));
+        assert!(toml.contains("[HISTORY.archive2]"));
+        assert!(toml.contains("curl -sf https://archive2.example.com/{0} -o {1}"));
+        assert!(toml.contains("[HISTORY.archive3]"));
+        assert!(toml.contains("curl -sf https://archive3.example.com/{0} -o {1}"));
+    }
+
+    /// Test all valid log levels are accepted
+    #[test]
+    fn test_all_valid_log_levels() {
+        let log_levels = vec!["fatal", "error", "warning", "info", "debug", "trace"];
+
+        for log_level in log_levels {
+            let config = CaptiveCoreConfig {
+                network_passphrase: None,
+                history_archive_urls: vec!["https://archive.example.com".to_string()],
+                peer_port: None,
+                http_port: None,
+                log_level: Some(log_level.to_string()),
+                additional_config: None,
+            };
+
+            let node = create_test_node(config);
+            let builder = CaptiveCoreConfigBuilder::from_node_config(&node).unwrap();
+            let toml = builder.build_toml();
+
+            assert!(toml.is_ok(), "Log level '{}' should be valid", log_level);
+            let toml = toml.unwrap();
+            assert!(toml.contains(&format!("LOG_LEVEL=\"{}\"", log_level)));
+        }
+    }
+
+    /// Test validation catches empty network passphrase
+    #[test]
+    fn test_validation_empty_passphrase() {
+        let builder = CaptiveCoreConfigBuilder {
+            network_passphrase: String::new(), // Empty!
+            history_archive_urls: vec!["https://archive.example.com".to_string()],
+            peer_port: DEFAULT_PEER_PORT,
+            http_port: DEFAULT_HTTP_PORT,
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            additional_config: None,
+        };
+
+        let result = builder.build_toml();
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("Network passphrase cannot be empty"));
+    }
+
+    /// Test TOML output is well-formed
+    #[test]
+    fn test_toml_output_well_formed() {
+        let config = CaptiveCoreConfig {
+            network_passphrase: None,
+            history_archive_urls: vec!["https://archive.example.com".to_string()],
+            peer_port: None,
+            http_port: None,
+            log_level: None,
+            additional_config: None,
+        };
+
+        let node = create_test_node(config);
+        let builder = CaptiveCoreConfigBuilder::from_node_config(&node).unwrap();
+        let toml = builder.build_toml().unwrap();
+
+        // Verify basic TOML structure
+        assert!(toml.contains("NETWORK_PASSPHRASE="));
+        assert!(toml.contains("[HISTORY.archive1]"));
+        assert!(toml.contains("get="));
+        assert!(toml.contains("PEER_PORT="));
+        assert!(toml.contains("HTTP_PORT="));
+        assert!(toml.contains("LOG_LEVEL="));
+
+        // Verify no trailing issues
+        assert!(!toml.is_empty());
+        assert!(toml.len() > 100); // Should be reasonably sized
+    }
 }
