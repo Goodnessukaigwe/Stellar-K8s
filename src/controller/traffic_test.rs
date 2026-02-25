@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_multiple_pods_with_different_ips() {
-        let pods = vec![
+        let pods = [
             create_test_pod(
                 "pod-0",
                 "default",
@@ -582,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_traffic_annotation_label_distinct_from_role() {
-        let labels = vec![
+        let labels = [
             ("stellar.org/role", "read-replica"),
             ("stellar.org/traffic", "enabled"),
         ];

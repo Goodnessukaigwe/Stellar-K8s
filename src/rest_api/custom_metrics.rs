@@ -55,6 +55,7 @@ impl StellarMetricType {
     }
 
     /// Get the prometheus metric name
+    #[allow(dead_code)]
     pub fn prometheus_name(&self) -> &'static str {
         match self {
             StellarMetricType::LedgerSequence => "stellar_node_ledger_sequence",
