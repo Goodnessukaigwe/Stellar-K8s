@@ -609,11 +609,13 @@ mod dns_resolver_tests {
 
         // Callers should treat NotFound as "no peers available" rather than a
         // hard failure – mirror the same pattern used in extract_peer_info.
-        let peers = match resolve_to_peers(&resolver, "gone.stellar-system.svc.cluster.local", 11625).await {
-            Ok(p) => p,
-            Err(DnsError::NotFound(_)) => Vec::new(),
-            Err(e) => panic!("unexpected error: {e}"),
-        };
+        let peers =
+            match resolve_to_peers(&resolver, "gone.stellar-system.svc.cluster.local", 11625).await
+            {
+                Ok(p) => p,
+                Err(DnsError::NotFound(_)) => Vec::new(),
+                Err(e) => panic!("unexpected error: {e}"),
+            };
 
         assert!(peers.is_empty(), "NXDOMAIN should yield an empty peer list");
     }
@@ -663,11 +665,13 @@ mod dns_resolver_tests {
         let resolver =
             MockDnsResolver::new().add_timeout("slow.stellar-system.svc.cluster.local");
 
-        let peers = match resolve_to_peers(&resolver, "slow.stellar-system.svc.cluster.local", 11625).await {
-            Ok(p) => p,
-            Err(DnsError::Timeout(_)) => Vec::new(),
-            Err(e) => panic!("unexpected error: {e}"),
-        };
+        let peers =
+            match resolve_to_peers(&resolver, "slow.stellar-system.svc.cluster.local", 11625).await
+            {
+                Ok(p) => p,
+                Err(DnsError::Timeout(_)) => Vec::new(),
+                Err(e) => panic!("unexpected error: {e}"),
+            };
 
         assert!(peers.is_empty(), "timeout should yield an empty peer list");
     }
@@ -732,7 +736,11 @@ mod dns_resolver_tests {
             }
         }
 
-        assert_eq!(all_peers.len(), 2, "only the two successful resolutions should contribute peers");
+        assert_eq!(
+            all_peers.len(),
+            2,
+            "only the two successful resolutions should contribute peers"
+        );
         let ips: Vec<&str> = all_peers.iter().map(|p| p.ip.as_str()).collect();
         assert!(ips.contains(&"10.0.0.1"));
         assert!(ips.contains(&"10.0.0.3"));
@@ -749,8 +757,10 @@ mod dns_resolver_tests {
             ..Default::default()
         };
 
-        let resolver = MockDnsResolver::new()
-            .add_success("validator-0.stellar-system.svc.cluster.local", vec!["10.0.0.1"]);
+        let resolver = MockDnsResolver::new().add_success(
+            "validator-0.stellar-system.svc.cluster.local",
+            vec!["10.0.0.1"],
+        );
 
         let peers = resolve_to_peers(
             &resolver,

@@ -1149,11 +1149,8 @@ mod cli_tests {
 
     #[test]
     fn webhook_tls_paths() {
-        let args = parse_webhook(&[
-            "--cert-path", "/tls/tls.crt",
-            "--key-path", "/tls/tls.key",
-        ])
-        .unwrap();
+        let args =
+            parse_webhook(&["--cert-path", "/tls/tls.crt", "--key-path", "/tls/tls.key"]).unwrap();
         assert_eq!(args.cert_path.as_deref(), Some("/tls/tls.crt"));
         assert_eq!(args.key_path.as_deref(), Some("/tls/tls.key"));
     }

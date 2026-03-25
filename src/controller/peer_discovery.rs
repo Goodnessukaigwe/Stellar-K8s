@@ -69,20 +69,21 @@ impl DnsResolver for TokioDnsResolver {
         let hostname = hostname.to_string();
         let timeout = self.timeout;
 
-        let lookup = tokio::time::timeout(timeout, tokio::net::lookup_host(format!("{hostname}:0")))
-            .await
-            .map_err(|_| DnsError::Timeout(hostname.clone()))?
-            .map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("NXDOMAIN")
-                    || msg.contains("not found")
-                    || msg.contains("No such host")
-                {
-                    DnsError::NotFound(hostname.clone())
-                } else {
-                    DnsError::Other(hostname.clone(), msg)
-                }
-            })?;
+        let lookup =
+            tokio::time::timeout(timeout, tokio::net::lookup_host(format!("{hostname}:0")))
+                .await
+                .map_err(|_| DnsError::Timeout(hostname.clone()))?
+                .map_err(|e| {
+                    let msg = e.to_string();
+                    if msg.contains("NXDOMAIN")
+                        || msg.contains("not found")
+                        || msg.contains("No such host")
+                    {
+                        DnsError::NotFound(hostname.clone())
+                    } else {
+                        DnsError::Other(hostname.clone(), msg)
+                    }
+                })?;
 
         let ips: Vec<IpAddr> = lookup.map(|addr| addr.ip()).collect();
         if ips.is_empty() {
