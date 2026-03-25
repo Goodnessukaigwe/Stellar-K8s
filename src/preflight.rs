@@ -31,11 +31,21 @@ pub struct CheckResult {
 
 impl CheckResult {
     fn pass(name: &'static str, severity: CheckSeverity, msg: impl Into<String>) -> Self {
-        Self { name, passed: true, severity, message: msg.into() }
+        Self {
+            name,
+            passed: true,
+            severity,
+            message: msg.into(),
+        }
     }
 
     fn fail(name: &'static str, severity: CheckSeverity, msg: impl Into<String>) -> Self {
-        Self { name, passed: false, severity, message: msg.into() }
+        Self {
+            name,
+            passed: false,
+            severity,
+            message: msg.into(),
+        }
     }
 }
 
@@ -64,14 +74,12 @@ pub fn print_diagnostic_summary(results: &[CheckResult]) {
             info!("  [{}] {} - {}", status, r.name, r.message);
         } else {
             match r.severity {
-                CheckSeverity::Critical => error!(
-                    "  [{}][{}] {} - {}",
-                    status, severity, r.name, r.message
-                ),
-                CheckSeverity::Warning => warn!(
-                    "  [{}][{}] {} - {}",
-                    status, severity, r.name, r.message
-                ),
+                CheckSeverity::Critical => {
+                    error!("  [{}][{}] {} - {}", status, severity, r.name, r.message)
+                }
+                CheckSeverity::Warning => {
+                    warn!("  [{}][{}] {} - {}", status, severity, r.name, r.message)
+                }
             }
         }
     }
