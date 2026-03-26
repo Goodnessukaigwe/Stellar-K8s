@@ -2,6 +2,7 @@ use std::error::Error;
 use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use tracing::info;
 
 /// Returns true if the given binary is accessible in PATH.
 fn tool_available(binary: &str) -> bool {
@@ -959,7 +960,7 @@ fn e2e_kind_horizon_lifecycle() -> Result<(), Box<dyn Error>> {
         )?;
     }
 
-    let operator_yaml = operator_manifest(&image);
+    let operator_yaml = operator_manifest(&image, None);
     let _cleanup = HorizonCleanup::new(operator_yaml.clone());
 
     // ── Install CRD ──────────────────────────────────────────────────────────
