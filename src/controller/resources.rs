@@ -36,6 +36,7 @@ use kube::api::{Api, DeleteParams, Patch, PatchParams, PostParams};
 use kube::{Client, Resource, ResourceExt};
 use tracing::{info, instrument, warn};
 
+use crate::scheduler::scoring::extract_peer_names_from_toml;
 use crate::crd::types::PodAntiAffinityStrength;
 use crate::crd::{
     BackupConfiguration, BarmanObjectStore, BootstrapConfiguration, Cluster, ClusterSpec,
@@ -1439,14 +1440,94 @@ pub(crate) fn merge_workload_affinity(node: &StellarNode) -> Option<Affinity> {
     if let Some(na) = node.spec.storage.node_affinity.clone() {
         aff.node_affinity = Some(na);
     }
+
+    let mut req_terms = Vec::new();
+    let mut pref_terms = Vec::new();
+
+    // 1. Default network-level separation
     if let Some(pa) = build_network_pod_anti_affinity(node) {
-        aff.pod_anti_affinity = Some(pa);
+        if let Some(mut req) = pa.required_during_scheduling_ignored_during_execution {
+            req_terms.append(&mut req);
+        }
+        if let Some(mut pref) = pa.preferred_during_scheduling_ignored_during_execution {
+            pref_terms.append(&mut pref);
+        }
     }
+
+    // 2. SCP-aware separation (Validators only)
+    if let Some(pa) = build_scp_aware_pod_anti_affinity(node) {
+        if let Some(mut req) = pa.required_during_scheduling_ignored_during_execution {
+            req_terms.append(&mut req);
+        }
+        if let Some(mut pref) = pa.preferred_during_scheduling_ignored_during_execution {
+            pref_terms.append(&mut pref);
+        }
+    }
+
+    if !req_terms.is_empty() || !pref_terms.is_empty() {
+        aff.pod_anti_affinity = Some(PodAntiAffinity {
+            required_during_scheduling_ignored_during_execution: if req_terms.is_empty() {
+                None
+            } else {
+                Some(req_terms)
+            },
+            preferred_during_scheduling_ignored_during_execution: if pref_terms.is_empty() {
+                None
+            } else {
+                Some(pref_terms)
+            },
+        });
+    }
+
     if aff.node_affinity.is_none() && aff.pod_anti_affinity.is_none() {
         None
     } else {
         Some(aff)
     }
+}
+
+fn build_scp_aware_pod_anti_affinity(node: &StellarNode) -> Option<PodAntiAffinity> {
+    // Only applies to Validators when SCP-aware placement is enabled
+    if node.spec.node_type != NodeType::Validator || !node.spec.placement.scp_aware_anti_affinity {
+        return None;
+    }
+
+    let qset = node
+        .spec
+        .validator_config
+        .as_ref()
+        .and_then(|c| c.quorum_set.as_ref())?;
+
+    let peer_names = extract_peer_names_from_toml(qset);
+    if peer_names.is_empty() {
+        return None;
+    }
+
+    let mut terms = Vec::new();
+
+    for peer_name in peer_names {
+        // We discourage placing this validator on the same node as its quorum set members.
+        // Each peer is identified by its instance name label.
+        let mut match_labels = BTreeMap::new();
+        match_labels.insert("app.kubernetes.io/instance".to_string(), peer_name);
+
+        terms.push(WeightedPodAffinityTerm {
+            weight: 100,
+            pod_affinity_term: PodAffinityTerm {
+                label_selector: Some(LabelSelector {
+                    match_labels: Some(match_labels),
+                    ..Default::default()
+                }),
+                topology_key: "kubernetes.io/hostname".to_string(),
+                ..Default::default()
+            },
+        });
+    }
+
+    Some(PodAntiAffinity {
+        preferred_during_scheduling_ignored_during_execution: Some(terms),
+        ..Default::default()
+    })
 }
 
 fn build_network_pod_anti_affinity(node: &StellarNode) -> Option<PodAntiAffinity> {
