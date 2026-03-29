@@ -280,11 +280,30 @@ mod tests {
         let node = make_node(Some("my-node"), NodeType::Validator, "v21.0.0");
         let labels = LabelPropagator::new(&node).standard_labels();
 
-        assert_eq!(labels.get("app.kubernetes.io/name").map(|s| s.as_str()), Some("stellar-node"));
-        assert_eq!(labels.get("app.kubernetes.io/instance").map(|s| s.as_str()), Some("my-node"));
-        assert_eq!(labels.get("app.kubernetes.io/component").map(|s| s.as_str()), Some("validator"));
-        assert_eq!(labels.get("app.kubernetes.io/managed-by").map(|s| s.as_str()), Some("stellar-operator"));
-        assert_eq!(labels.get("app.kubernetes.io/version").map(|s| s.as_str()), Some("v21.0.0"));
+        assert_eq!(
+            labels.get("app.kubernetes.io/name").map(|s| s.as_str()),
+            Some("stellar-node")
+        );
+        assert_eq!(
+            labels.get("app.kubernetes.io/instance").map(|s| s.as_str()),
+            Some("my-node")
+        );
+        assert_eq!(
+            labels
+                .get("app.kubernetes.io/component")
+                .map(|s| s.as_str()),
+            Some("validator")
+        );
+        assert_eq!(
+            labels
+                .get("app.kubernetes.io/managed-by")
+                .map(|s| s.as_str()),
+            Some("stellar-operator")
+        );
+        assert_eq!(
+            labels.get("app.kubernetes.io/version").map(|s| s.as_str()),
+            Some("v21.0.0")
+        );
         assert_eq!(labels.len(), 5);
     }
 
@@ -292,25 +311,41 @@ mod tests {
     fn standard_labels_component_is_lowercased() {
         let node = make_node(Some("horizon-1"), NodeType::Horizon, "v2.28.0");
         let labels = LabelPropagator::new(&node).standard_labels();
-        assert_eq!(labels.get("app.kubernetes.io/component").map(|s| s.as_str()), Some("horizon"));
+        assert_eq!(
+            labels
+                .get("app.kubernetes.io/component")
+                .map(|s| s.as_str()),
+            Some("horizon")
+        );
 
         let node2 = make_node(Some("soroban-1"), NodeType::SorobanRpc, "v0.9.0");
         let labels2 = LabelPropagator::new(&node2).standard_labels();
-        assert_eq!(labels2.get("app.kubernetes.io/component").map(|s| s.as_str()), Some("sorobanrpc"));
+        assert_eq!(
+            labels2
+                .get("app.kubernetes.io/component")
+                .map(|s| s.as_str()),
+            Some("sorobanrpc")
+        );
     }
 
     #[test]
     fn standard_labels_falls_back_to_unknown_when_name_is_none() {
         let node = make_node(None, NodeType::Validator, "v21.0.0");
         let labels = LabelPropagator::new(&node).standard_labels();
-        assert_eq!(labels.get("app.kubernetes.io/instance").map(|s| s.as_str()), Some("unknown"));
+        assert_eq!(
+            labels.get("app.kubernetes.io/instance").map(|s| s.as_str()),
+            Some("unknown")
+        );
     }
 
     #[test]
     fn standard_labels_falls_back_to_unknown_when_name_is_empty() {
         let node = make_node(Some(""), NodeType::Validator, "v21.0.0");
         let labels = LabelPropagator::new(&node).standard_labels();
-        assert_eq!(labels.get("app.kubernetes.io/instance").map(|s| s.as_str()), Some("unknown"));
+        assert_eq!(
+            labels.get("app.kubernetes.io/instance").map(|s| s.as_str()),
+            Some("unknown")
+        );
     }
 
     // --- filtered_user_labels tests ---
@@ -333,7 +368,10 @@ mod tests {
         let node = make_node_with_labels(user_labels, None);
         let result = LabelPropagator::new(&node).filtered_user_labels();
         assert_eq!(result.get("team").map(|s| s.as_str()), Some("platform"));
-        assert_eq!(result.get("billing/project").map(|s| s.as_str()), Some("stellar"));
+        assert_eq!(
+            result.get("billing/project").map(|s| s.as_str()),
+            Some("stellar")
+        );
     }
 
     #[test]
@@ -431,9 +469,15 @@ mod tests {
     fn merge_onto_inserts_propagated_keys() {
         let existing: BTreeMap<String, String> = BTreeMap::new();
         let mut propagated = BTreeMap::new();
-        propagated.insert("app.kubernetes.io/name".to_string(), "stellar-node".to_string());
+        propagated.insert(
+            "app.kubernetes.io/name".to_string(),
+            "stellar-node".to_string(),
+        );
         let result = LabelPropagator::merge_onto(&existing, &propagated);
-        assert_eq!(result.get("app.kubernetes.io/name").map(|s| s.as_str()), Some("stellar-node"));
+        assert_eq!(
+            result.get("app.kubernetes.io/name").map(|s| s.as_str()),
+            Some("stellar-node")
+        );
     }
 
     #[test]
@@ -441,10 +485,16 @@ mod tests {
         let mut existing = BTreeMap::new();
         existing.insert("unmanaged".to_string(), "keep-me".to_string());
         let mut propagated = BTreeMap::new();
-        propagated.insert("app.kubernetes.io/name".to_string(), "stellar-node".to_string());
+        propagated.insert(
+            "app.kubernetes.io/name".to_string(),
+            "stellar-node".to_string(),
+        );
         let result = LabelPropagator::merge_onto(&existing, &propagated);
         assert_eq!(result.get("unmanaged").map(|s| s.as_str()), Some("keep-me"));
-        assert_eq!(result.get("app.kubernetes.io/name").map(|s| s.as_str()), Some("stellar-node"));
+        assert_eq!(
+            result.get("app.kubernetes.io/name").map(|s| s.as_str()),
+            Some("stellar-node")
+        );
     }
 
     #[test]
@@ -479,9 +529,14 @@ mod tests {
         let mut previously_propagated = BTreeMap::new();
         previously_propagated.insert("team".to_string(), "platform".to_string());
 
-        let result = LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
+        let result =
+            LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
         assert!(!result.contains_key("team"), "stale key should be removed");
-        assert_eq!(result.get("unmanaged").map(|s| s.as_str()), Some("keep-me"), "unmanaged key must be preserved");
+        assert_eq!(
+            result.get("unmanaged").map(|s| s.as_str()),
+            Some("keep-me"),
+            "unmanaged key must be preserved"
+        );
     }
 
     #[test]
@@ -495,8 +550,12 @@ mod tests {
         let mut previously_propagated = BTreeMap::new();
         previously_propagated.insert("team".to_string(), "platform".to_string());
 
-        let result = LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
-        assert!(result.contains_key("team"), "key still in propagated must be kept");
+        let result =
+            LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
+        assert!(
+            result.contains_key("team"),
+            "key still in propagated must be kept"
+        );
     }
 
     #[test]
@@ -507,7 +566,8 @@ mod tests {
         let propagated: BTreeMap<String, String> = BTreeMap::new();
         let previously_propagated: BTreeMap<String, String> = BTreeMap::new();
 
-        let result = LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
+        let result =
+            LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
         assert_eq!(result.get("unmanaged").map(|s| s.as_str()), Some("keep-me"));
     }
 
@@ -516,7 +576,8 @@ mod tests {
         let existing: BTreeMap<String, String> = BTreeMap::new();
         let propagated: BTreeMap<String, String> = BTreeMap::new();
         let previously_propagated: BTreeMap<String, String> = BTreeMap::new();
-        let result = LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
+        let result =
+            LabelPropagator::remove_stale_labels(&existing, &propagated, &previously_propagated);
         assert!(result.is_empty());
     }
 
@@ -524,12 +585,18 @@ mod tests {
     fn compute_standard_labels_win_over_user_labels_on_conflict() {
         let mut user_labels = BTreeMap::new();
         // User tries to override a standard label
-        user_labels.insert("app.kubernetes.io/name".to_string(), "my-custom-name".to_string());
+        user_labels.insert(
+            "app.kubernetes.io/name".to_string(),
+            "my-custom-name".to_string(),
+        );
         user_labels.insert("team".to_string(), "platform".to_string());
         let node = make_node_with_labels(user_labels, None);
         let result = LabelPropagator::new(&node).compute();
         // Standard label wins
-        assert_eq!(result.get("app.kubernetes.io/name").map(|s| s.as_str()), Some("stellar-node"));
+        assert_eq!(
+            result.get("app.kubernetes.io/name").map(|s| s.as_str()),
+            Some("stellar-node")
+        );
         assert!(result.contains_key("team"));
     }
 }

@@ -60,6 +60,7 @@ use super::dr_drill;
 use super::finalizers::STELLAR_NODE_FINALIZER;
 use super::health;
 use super::kms_secret;
+use super::label_propagation::LabelPropagator;
 #[cfg(feature = "metrics")]
 use super::metrics;
 use super::mtls;
@@ -69,7 +70,6 @@ use super::peer_discovery;
 use super::remediation;
 use super::resources;
 use super::service_mesh;
-use super::label_propagation::LabelPropagator;
 use super::vpa as vpa_controller;
 use super::vsl;
 
@@ -103,7 +103,8 @@ pub struct ControllerState {
     /// Handle to reload the tracing filter
     pub log_reload_handle: Handle<EnvFilter, Registry>,
     /// Optional expiration time for a temporary log level change
-    pub log_level_expires_at: std::sync::Arc<tokio::sync::Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
+    pub log_level_expires_at:
+        std::sync::Arc<tokio::sync::Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
 }
 
 impl ControllerState {
@@ -597,12 +598,25 @@ pub(crate) async fn apply_stellar_node(
                         .await?;
                     }
                     NodeType::Horizon | NodeType::SorobanRpc => {
-                        resources::ensure_deployment(client, node, ctx.enable_mtls, &propagated_labels, ctx.dry_run)
-                            .await?;
+                        resources::ensure_deployment(
+                            client,
+                            node,
+                            ctx.enable_mtls,
+                            &propagated_labels,
+                            ctx.dry_run,
+                        )
+                        .await?;
                     }
                 }
 
-                resources::ensure_service(client, node, ctx.enable_mtls, &propagated_labels, ctx.dry_run).await?;
+                resources::ensure_service(
+                    client,
+                    node,
+                    ctx.enable_mtls,
+                    &propagated_labels,
+                    ctx.dry_run,
+                )
+                .await?;
                 Ok(())
             },
         )

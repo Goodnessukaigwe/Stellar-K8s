@@ -37,7 +37,6 @@ use kube::api::{Api, DeleteParams, Patch, PatchParams, PostParams};
 use kube::{Client, Resource, ResourceExt};
 use tracing::{info, instrument, warn};
 
-use crate::scheduler::scoring::extract_peer_names_from_toml;
 use crate::crd::types::PodAntiAffinityStrength;
 use crate::crd::{
     BackupConfiguration, BarmanObjectStore, BootstrapConfiguration, Cluster, ClusterSpec,
@@ -48,6 +47,7 @@ use crate::crd::{
     WalBackupConfiguration,
 };
 use crate::error::{Error, Result};
+use crate::scheduler::scoring::extract_peer_names_from_toml;
 
 /// Get the standard labels for a StellarNode's resources
 pub(crate) fn standard_labels(node: &StellarNode) -> BTreeMap<String, String> {
@@ -173,7 +173,8 @@ pub async fn ensure_pvc(
     // Apply label propagation: merge propagated labels, then remove stale ones
     let base_labels = pvc.metadata.labels.clone().unwrap_or_default();
     let merged = LabelPropagator::merge_onto(&base_labels, propagated_labels);
-    let final_labels = LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
+    let final_labels =
+        LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
     pvc.metadata.labels = Some(final_labels);
 
     match api.get(&name).await {
@@ -493,7 +494,8 @@ pub async fn ensure_deployment(
     // Apply label propagation: merge propagated labels, then remove stale ones
     let base_labels = deployment.metadata.labels.clone().unwrap_or_default();
     let merged = LabelPropagator::merge_onto(&base_labels, propagated_labels);
-    let final_labels = LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
+    let final_labels =
+        LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
     deployment.metadata.labels = Some(final_labels);
 
     let patch = Patch::Apply(&deployment);
@@ -621,7 +623,8 @@ pub async fn ensure_statefulset(
     // Apply label propagation: merge propagated labels, then remove stale ones
     let base_labels = statefulset.metadata.labels.clone().unwrap_or_default();
     let merged = LabelPropagator::merge_onto(&base_labels, propagated_labels);
-    let final_labels = LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
+    let final_labels =
+        LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
     statefulset.metadata.labels = Some(final_labels);
 
     let patch = Patch::Apply(&statefulset);
@@ -735,7 +738,8 @@ pub async fn ensure_service(
     // Apply label propagation: merge propagated labels, then remove stale ones
     let base_labels = service.metadata.labels.clone().unwrap_or_default();
     let merged = LabelPropagator::merge_onto(&base_labels, propagated_labels);
-    let final_labels = LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
+    let final_labels =
+        LabelPropagator::remove_stale_labels(&merged, propagated_labels, &existing_labels);
     service.metadata.labels = Some(final_labels);
 
     let patch = Patch::Apply(&service);

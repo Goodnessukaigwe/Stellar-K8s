@@ -1651,12 +1651,11 @@ fn e2e_operator_upgrade_simulation() -> Result<(), Box<dyn Error>> {
     }
 
     // Req 1.3 — cluster name
-    let cluster_name =
-        std::env::var("KIND_CLUSTER_NAME").unwrap_or_else(|_| "stellar-e2e".into());
+    let cluster_name = std::env::var("KIND_CLUSTER_NAME").unwrap_or_else(|_| "stellar-e2e".into());
 
     // Req 1.4 — operator images
-    let old_image = std::env::var("E2E_OLD_OPERATOR_IMAGE")
-        .unwrap_or_else(|_| "stellar-operator:old".into());
+    let old_image =
+        std::env::var("E2E_OLD_OPERATOR_IMAGE").unwrap_or_else(|_| "stellar-operator:old".into());
 
     // Req 1.3 — create or reuse Kind cluster
     ensure_kind_cluster(&cluster_name)?;
@@ -1741,8 +1740,7 @@ fn e2e_operator_upgrade_simulation() -> Result<(), Box<dyn Error>> {
     )?;
 
     // Req 2.3 — record baseline restart counts
-    let baseline_restarts =
-        record_pod_restart_counts(UPGRADE_TEST_NAMESPACE, UPGRADE_NODE_NAME)?;
+    let baseline_restarts = record_pod_restart_counts(UPGRADE_TEST_NAMESPACE, UPGRADE_NODE_NAME)?;
 
     // Req 2.4 — record old lease holder
     let _old_lease_holder = get_lease_holder(OPERATOR_NAMESPACE)?;
@@ -1750,8 +1748,8 @@ fn e2e_operator_upgrade_simulation() -> Result<(), Box<dyn Error>> {
     // ── Phase 3: Upgrade Execution ───────────────────────────────────────────
 
     // Req 3.4 — read new image (moved from placeholder above)
-    let new_image = std::env::var("E2E_NEW_OPERATOR_IMAGE")
-        .unwrap_or_else(|_| "stellar-operator:new".into());
+    let new_image =
+        std::env::var("E2E_NEW_OPERATOR_IMAGE").unwrap_or_else(|_| "stellar-operator:new".into());
 
     // Req 3.1 — apply new operator manifest
     let new_operator_yaml = operator_manifest(&new_image, None);
@@ -1769,9 +1767,7 @@ fn e2e_operator_upgrade_simulation() -> Result<(), Box<dyn Error>> {
             "--timeout=180s",
         ],
     )
-    .map_err(|_| -> Box<dyn Error> {
-        "New operator rollout timed out after 180s".into()
-    })?;
+    .map_err(|_| -> Box<dyn Error> { "New operator rollout timed out after 180s".into() })?;
 
     // Req 3.3 — verify StellarNode still exists (not deleted/recreated)
     run_cmd(
@@ -1802,10 +1798,7 @@ fn e2e_operator_upgrade_simulation() -> Result<(), Box<dyn Error>> {
         },
     )
     .map_err(|_| -> Box<dyn Error> {
-        format!(
-            "Lease did not transfer within 60s; last holder: {last_holder}"
-        )
-        .into()
+        format!("Lease did not transfer within 60s; last holder: {last_holder}").into()
     })?;
 
     // ── Phase 5: Managed Pod Stability ───────────────────────────────────────

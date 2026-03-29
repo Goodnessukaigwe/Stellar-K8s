@@ -28,8 +28,8 @@ fn load_manifest(path: &str) -> serde_yaml::Value {
 fn load_template_files() -> Vec<(String, serde_yaml::Value)> {
     let dir = "config/manifests/gatekeeper";
     let mut results = Vec::new();
-    let entries = fs::read_dir(dir)
-        .unwrap_or_else(|e| panic!("Failed to read directory '{}': {}", dir, e));
+    let entries =
+        fs::read_dir(dir).unwrap_or_else(|e| panic!("Failed to read directory '{}': {}", dir, e));
     for entry in entries.flatten() {
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -49,8 +49,8 @@ fn load_template_files() -> Vec<(String, serde_yaml::Value)> {
 fn load_constraint_files() -> Vec<(String, serde_yaml::Value)> {
     let dir = "config/manifests/gatekeeper";
     let mut results = Vec::new();
-    let entries = fs::read_dir(dir)
-        .unwrap_or_else(|e| panic!("Failed to read directory '{}': {}", dir, e));
+    let entries =
+        fs::read_dir(dir).unwrap_or_else(|e| panic!("Failed to read directory '{}': {}", dir, e));
     for entry in entries.flatten() {
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -360,8 +360,8 @@ fn test_gatekeeper_config_exists_with_system_exclusions() {
 fn test_all_manifest_yaml_files_parse_without_error() {
     let dir = "config/manifests/gatekeeper";
     let mut parsed_count = 0;
-    let entries = fs::read_dir(dir)
-        .unwrap_or_else(|e| panic!("Failed to read directory '{}': {}", dir, e));
+    let entries =
+        fs::read_dir(dir).unwrap_or_else(|e| panic!("Failed to read directory '{}': {}", dir, e));
 
     for entry in entries.flatten() {
         let path = entry.path();

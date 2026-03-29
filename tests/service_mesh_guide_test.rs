@@ -38,8 +38,7 @@ fn extract_yaml_blocks(content: &str) -> Vec<String> {
 // ---------------------------------------------------------------------------
 
 fn guide_content() -> String {
-    std::fs::read_to_string("docs/service-mesh.md")
-        .expect("docs/service-mesh.md must exist")
+    std::fs::read_to_string("docs/service-mesh.md").expect("docs/service-mesh.md must exist")
 }
 
 // ---------------------------------------------------------------------------
