@@ -840,6 +840,7 @@ mod tests {
                 oci_snapshot: None,
                 service_mesh: None,
                 forensic_snapshot: None,
+                label_propagation: None,
                 resource_meta: None,
                 read_pool_endpoint: None,
             },
@@ -865,6 +866,7 @@ mod tests {
                 quorum_analysis_timestamp: None,
                 vault_observed_secret_version: None,
                 forensic_snapshot_phase: None,
+                label_propagation_status: None,
             }),
         }
     }

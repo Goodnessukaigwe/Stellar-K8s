@@ -4331,6 +4331,7 @@ dependencies = [
  "ed25519-dalek",
  "flate2",
  "futures",
+ "glob",
  "hex",
  "hostname",
  "k8s-openapi",
