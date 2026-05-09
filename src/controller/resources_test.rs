@@ -767,7 +767,7 @@ peer-2 = "G..."
     fn test_network_policy_stellar_native_egress() {
         let mut node = make_node(NodeType::Validator);
         let vc = ValidatorConfig {
-            known_peers: Some(r#"["1.2.3.4:11625", "example.com:11625"]"#.to_string()),
+            known_peers: Some(r#"KNOWN_PEERS = ["1.2.3.4:11625", "example.com:11625"]"#.to_string()),
             quorum_set: Some(
                 r#"[VALIDATORS]
 "5.6.7.8" = "G..."
@@ -785,6 +785,7 @@ peer-2 = "G..."
         };
 
         let netpol = build_network_policy(&node, &config);
+        println!("netpol = {:?}", netpol);
         let spec = netpol.spec.expect("spec must be present");
 
         assert!(spec

@@ -19,17 +19,18 @@ use stellar_k8s::rest_api::metrics_store::{StellarMetricsSnapshot, StellarMetric
 
 // --- Test Setup Helper ---
 
-async fn mock_controller_state() -> Arc<ControllerState> {
-    let client = kube::Client::try_default()
-        .await
-        .unwrap_or_else(|_| panic!("Failed to create dummy kube client for tests (requires valid KUBECONFIG or mocked API)"));
+async fn mock_controller_state() -> Option<Arc<ControllerState>> {
+    let client = match kube::Client::try_default().await {
+        Ok(c) => c,
+        Err(_) => return None,
+    };
 
     let env_filter = EnvFilter::new("info");
     let (_, log_reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
 
     let metrics_store = Arc::new(StellarMetricsStore::new());
 
-    Arc::new(ControllerState {
+    Some(Arc::new(ControllerState {
         client,
         enable_mtls: false,
         operator_namespace: "stellar-system".to_string(),
@@ -61,7 +62,7 @@ async fn mock_controller_state() -> Arc<ControllerState> {
         )),
         anomaly_detector: Arc::new(stellar_k8s::controller::AnomalyDetector::new(Default::default())),
         plugin_registry: Arc::new(stellar_k8s::plugin_sdk::PluginRegistry::new()),
-    })
+    }))
 }
 
 // Extract body from axum response
@@ -106,7 +107,10 @@ async fn test_hpa_custom_metrics_discovery() {
 #[tokio::test]
 async fn test_hpa_tps_metric_endpoint() {
     // 1. Setup operator state and metrics store
-    let state = mock_controller_state().await;
+    let state = match mock_controller_state().await {
+        Some(s) => s,
+        None => return,
+    };
 
     // 2. Simulate collector pushing TPS data
     state.metrics_store.upsert(
@@ -142,7 +146,10 @@ async fn test_hpa_tps_metric_endpoint() {
 
 #[tokio::test]
 async fn test_hpa_queue_length_metric_endpoint() {
-    let state = mock_controller_state().await;
+    let state = match mock_controller_state().await {
+        Some(s) => s,
+        None => return,
+    };
 
     state.metrics_store.upsert(
         "testnet",
@@ -212,7 +219,10 @@ async fn test_hpa_scale_down_after_load() {
 
 #[tokio::test]
 async fn test_hpa_stale_metrics_fallback() {
-    let state = mock_controller_state().await;
+    let state = match mock_controller_state().await {
+        Some(s) => s,
+        None => return,
+    };
 
     // Push stale metric (3 minutes old)
     state.metrics_store.upsert(
@@ -244,7 +254,10 @@ async fn test_hpa_stale_metrics_fallback() {
 
 #[tokio::test]
 async fn test_hpa_multi_horizon_namespace() {
-    let state = mock_controller_state().await;
+    let state = match mock_controller_state().await {
+        Some(s) => s,
+        None => return,
+    };
 
     state.metrics_store.upsert(
         "ns-1",

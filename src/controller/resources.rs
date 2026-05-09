@@ -114,7 +114,10 @@ fn apply_probe_override(
     base: Option<k8s_openapi::api::core::v1::Probe>,
     override_cfg: Option<&crate::crd::types::ProbeOverride>,
 ) -> Option<k8s_openapi::api::core::v1::Probe> {
-    let cfg = override_cfg?;
+    let cfg = match override_cfg {
+        Some(c) => c,
+        None => return base,
+    };
     let mut probe = base.unwrap_or_default();
     if let Some(v) = cfg.initial_delay_seconds {
         probe.initial_delay_seconds = Some(v);
@@ -3510,41 +3513,54 @@ fn extract_peers_from_config(node: &StellarNode) -> Vec<String> {
 
     // 1. Parse KNOWN_PEERS if present
     if let Some(known_peers_toml) = &config.known_peers {
-        if let Ok(value) = known_peers_toml.parse::<toml::Value>() {
-            if let Some(kp_array) = value.as_array() {
-                for v in kp_array {
-                    if let Some(s) = v.as_str() {
-                        // Extract IP/Hostname from "IP:PORT"
-                        let peer = s.split(':').next().unwrap_or(s);
-                        peers.push(peer.to_string());
+        match known_peers_toml.parse::<toml::Value>() {
+            Ok(value) => {
+                println!("KNOWN_PEERS successfully parsed: {:?}", value);
+                if let Some(kp_array) = value.as_array() {
+                    for v in kp_array {
+                        if let Some(s) = v.as_str() {
+                            // Extract IP/Hostname from "IP:PORT"
+                            let peer = s.split(':').next().unwrap_or(s);
+                            peers.push(peer.to_string());
+                        }
                     }
-                }
-            } else if let Some(kp_table) = value.get("KNOWN_PEERS").and_then(|v| v.as_array()) {
-                for v in kp_table {
-                    if let Some(s) = v.as_str() {
-                        let peer = s.split(':').next().unwrap_or(s);
-                        peers.push(peer.to_string());
+                } else if let Some(kp_table) = value.get("KNOWN_PEERS").and_then(|v| v.as_array()) {
+                    for v in kp_table {
+                        if let Some(s) = v.as_str() {
+                            let peer = s.split(':').next().unwrap_or(s);
+                            peers.push(peer.to_string());
+                        }
                     }
+                } else {
+                    println!("KNOWN_PEERS matched Ok, but no array or KNOWN_PEERS key found");
                 }
             }
+            Err(e) => println!("KNOWN_PEERS parse error: {}", e),
         }
     }
 
     // 2. Parse QUORUM_SET for any direct IP references (rare but possible in custom setups)
     if let Some(qs_toml) = &config.quorum_set {
-        if let Ok(value) = qs_toml.parse::<toml::Value>() {
-            // Check for [VALIDATORS] section with IP-like keys
-            if let Some(validators) = value.get("VALIDATORS").and_then(|v| v.as_table()) {
-                for key in validators.keys() {
-                    // If key looks like an IP or hostname (not a public key), add it
-                    if !key.starts_with('G') && key.contains('.') {
-                        peers.push(key.clone());
+        match qs_toml.parse::<toml::Value>() {
+            Ok(value) => {
+                println!("QUORUM_SET successfully parsed: {:?}", value);
+                // Check for [VALIDATORS] section with IP-like keys
+                if let Some(validators) = value.get("VALIDATORS").and_then(|v| v.as_table()) {
+                    for key in validators.keys() {
+                        // If key looks like an IP or hostname (not a public key), add it
+                        if !key.starts_with('G') && key.contains('.') {
+                            peers.push(key.clone());
+                        }
                     }
+                } else {
+                    println!("QUORUM_SET matched Ok, but no VALIDATORS table found");
                 }
             }
+            Err(e) => println!("QUORUM_SET parse error: {}", e),
         }
     }
 
+    println!("Extracted peers: {:?}", peers);
     peers.sort();
     peers.dedup();
     peers
@@ -3908,7 +3924,9 @@ pub(crate) fn build_network_policy(
         ports: None,
     };
 
-    let egress_rules = vec![same_network_egress, dns_egress, intra_namespace_egress];
+    egress_rules.push(same_network_egress);
+    egress_rules.push(dns_egress);
+    egress_rules.push(intra_namespace_egress);
 
     NetworkPolicy {
         metadata: merge_resource_meta(

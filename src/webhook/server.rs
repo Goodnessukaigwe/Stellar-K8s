@@ -798,7 +798,14 @@ mod tests {
         let server = WebhookServer::new(runtime);
 
         let valid_object = serde_json::json!({
-            "metadata": { "name": "my-validator", "namespace": "default" },
+            "metadata": { 
+                "name": "my-validator", 
+                "namespace": "default",
+                "labels": {
+                    "project-id": "test",
+                    "owner": "test"
+                }
+            },
             "spec": {
                 "nodeType": "Validator",
                 "network": "testnet",
@@ -828,7 +835,14 @@ mod tests {
         let server = WebhookServer::new(runtime);
 
         let invalid_object = serde_json::json!({
-            "metadata": { "name": "bad", "namespace": "default" },
+            "metadata": { 
+                "name": "bad", 
+                "namespace": "default",
+                "labels": {
+                    "project-id": "test",
+                    "owner": "test"
+                }
+            },
             "spec": {
                 "nodeType": "InvalidType",
                 "network": "testnet",
@@ -856,7 +870,14 @@ mod tests {
         let server = WebhookServer::new(runtime);
 
         let missing_required = serde_json::json!({
-            "metadata": { "name": "no-config", "namespace": "default" },
+            "metadata": { 
+                "name": "no-config", 
+                "namespace": "default",
+                "labels": {
+                    "project-id": "test",
+                    "owner": "test"
+                }
+            },
             "spec": {
                 "nodeType": "Validator",
                 "network": "testnet",
@@ -889,7 +910,14 @@ mod tests {
         let server = WebhookServer::new(runtime);
 
         let valid_object = serde_json::json!({
-            "metadata": { "name": "my-validator", "namespace": "default" },
+            "metadata": { 
+                "name": "my-validator", 
+                "namespace": "default",
+                "labels": {
+                    "project-id": "test",
+                    "owner": "test"
+                }
+            },
             "spec": {
                 "nodeType": "Validator",
                 "network": "testnet",
@@ -952,7 +980,14 @@ mod tests {
         server.add_plugin(config).await.unwrap();
 
         let valid_object = serde_json::json!({
-            "metadata": { "name": "test", "namespace": "default" },
+            "metadata": { 
+                "name": "test", 
+                "namespace": "default",
+                "labels": {
+                    "project-id": "test",
+                    "owner": "test"
+                }
+            },
             "spec": {
                 "nodeType": "Validator",
                 "network": "testnet",
@@ -1028,7 +1063,14 @@ mod tests {
         server.add_plugin(config).await.unwrap();
 
         let valid_object = serde_json::json!({
-            "metadata": { "name": "test", "namespace": "default" },
+            "metadata": { 
+                "name": "test", 
+                "namespace": "default",
+                "labels": {
+                    "project-id": "test",
+                    "owner": "test"
+                }
+            },
             "spec": {
                 "nodeType": "Validator",
                 "network": "testnet",

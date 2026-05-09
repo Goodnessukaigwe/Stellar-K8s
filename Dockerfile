@@ -3,7 +3,7 @@
 # Stage 1: Chef - Dependency Caching Layer
 # (linux/amd64 only)
 # ==============================================================================
-FROM lukemathwalker/cargo-chef:latest-rust-1.93 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.93-bookworm AS chef
 WORKDIR /app
 
 # ==============================================================================

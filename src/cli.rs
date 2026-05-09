@@ -12,6 +12,7 @@ use stellar_k8s::incident;
 #[command(
     author,
     version,
+    disable_version_flag = true,
     about = "Stellar-K8s: Cloud-Native Kubernetes Operator for Stellar Infrastructure",
     long_about = "\
 \x1b[1;36m\

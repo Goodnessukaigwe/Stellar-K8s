@@ -11,7 +11,7 @@ repository = "https://github.com/stellar/stellar-k8s"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 lru = "0.16"
 printpdf = "0.7"
-toml = "0.8"
+toml = "0.5"
 # Glob pattern matching for label propagation filters
 glob = "0.3"
 

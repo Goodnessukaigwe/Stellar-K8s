@@ -308,7 +308,7 @@ impl TopologyHealthConsumer {
         let partition_detected = self.detect_partition(&states);
 
         // Calculate health score
-        let health_score = self.calculate_health_score(
+        let health_score = Self::calculate_health_score(
             active_validators,
             stalled_count,
             critical_count,
@@ -443,7 +443,6 @@ impl TopologyHealthConsumer {
 
     /// Calculate overall health score
     fn calculate_health_score(
-        &self,
         active: u32,
         stalled: u32,
         critical: u32,
@@ -501,27 +500,20 @@ mod tests {
 
     #[test]
     fn test_health_score_calculation() {
-        let consumer = TopologyHealthConsumer {
-            consumer: unsafe { std::mem::zeroed() }, // Mock for testing
-            config: TopologyHealthConfig::default(),
-            validator_states: Arc::new(RwLock::new(HashMap::new())),
-            latest_health: Arc::new(RwLock::new(None)),
-        };
-
         // Perfect health
-        let score = consumer.calculate_health_score(10, 0, 0, true, false);
+        let score = TopologyHealthConsumer::calculate_health_score(10, 0, 0, true, false);
         assert_eq!(score, 1.0);
 
         // Some stalled validators
-        let score = consumer.calculate_health_score(10, 3, 0, true, false);
+        let score = TopologyHealthConsumer::calculate_health_score(10, 3, 0, true, false);
         assert!(score < 1.0 && score > 0.6);
 
         // No quorum intersection
-        let score = consumer.calculate_health_score(10, 0, 0, false, false);
+        let score = TopologyHealthConsumer::calculate_health_score(10, 0, 0, false, false);
         assert!(score < 0.8);
 
         // Network partition
-        let score = consumer.calculate_health_score(10, 0, 0, true, true);
+        let score = TopologyHealthConsumer::calculate_health_score(10, 0, 0, true, true);
         assert!(score < 0.9);
     }
 }
