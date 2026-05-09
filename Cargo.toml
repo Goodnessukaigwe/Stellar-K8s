@@ -33,7 +33,7 @@ serde_json = "1"
 serde_yaml = "0.9"
 
 # Schema generation for CRDs
-schemars = "0.8"
+schemars = { version = "0.8", features = ["chrono"] }
 
 # Error handling
 thiserror = "1"
@@ -85,7 +85,7 @@ reqwest = { version = "0.12", features = [
 rdkafka = { version = "0.36", features = ["cmake-build", "ssl", "sasl"] }
 
 # REST API (optional)
-axum = { version = "0.8.8", optional = true, features = ["ws"] }
+axum = { version = "0.7.5", optional = true, features = ["ws"] }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["trace"], optional = true }
 

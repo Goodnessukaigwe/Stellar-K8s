@@ -35,8 +35,7 @@ use serde::{Deserialize, Serialize};
 // ── Config ────────────────────────────────────────────────────────────────────
 
 /// Eviction policy for the L2 (SSD) layer.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum EvictionPolicy {
     /// Evict the entry with the lowest access count (LFU approximation).
@@ -47,8 +46,7 @@ pub enum EvictionPolicy {
 }
 
 /// Configuration for the two-layer Soroban RPC cache.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SorobanCacheConfig {
     /// Maximum number of entries in the L1 in-memory LRU cache.
@@ -390,7 +388,7 @@ mod tests {
         // Simulate WASM execution: 1 ms per invocation (realistic for simple contracts).
         let simulate_wasm_exec = || -> Vec<u8> {
             std::thread::sleep(Duration::from_millis(1));
-            vec![0xDE, 0xAD, 0xBE, 0xEF; 256]
+            vec![0xDE; 256]
         };
 
         let key = "contract_abc123_invoke_transfer";

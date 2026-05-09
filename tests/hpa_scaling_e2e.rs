@@ -1,6 +1,6 @@
 use axum::extract::{Path, State};
 use axum::response::IntoResponse;
-use http::StatusCode;
+use axum::http::StatusCode;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -21,6 +21,7 @@ use stellar_k8s::rest_api::metrics_store::{StellarMetricsSnapshot, StellarMetric
 
 fn mock_controller_state() -> Arc<ControllerState> {
     let client = kube::Client::try_default()
+        .await
         .unwrap_or_else(|_| panic!("Failed to create dummy kube client for tests (requires valid KUBECONFIG or mocked API)"));
 
     let env_filter = EnvFilter::new("info");
@@ -50,9 +51,16 @@ fn mock_controller_state() -> Arc<ControllerState> {
         log_level_expires_at: Arc::new(Mutex::new(None)),
         last_event_received: Arc::new(AtomicU64::new(0)),
         job_registry: Arc::new(stellar_k8s::controller::background_jobs::JobRegistry::new()),
-        audit_log: Arc::new(stellar_k8s::controller::audit_log::AuditLog::new(100)),
+        audit_log: Arc::new(stellar_k8s::controller::audit_log::AuditLog::new()),
         oidc_config: None,
         metrics_store,
+        audit_recorder: Arc::new(stellar_k8s::controller::AuditRecorder::new(
+            Arc::new(stellar_k8s::controller::audit_log::AuditLog::new()),
+            vec![],
+            None,
+        )),
+        anomaly_detector: Arc::new(stellar_k8s::controller::AnomalyDetector::new(Default::default())),
+        plugin_registry: Arc::new(stellar_k8s::plugin_sdk::PluginRegistry::new()),
     })
 }
 

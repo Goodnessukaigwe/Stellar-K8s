@@ -21,6 +21,7 @@ FROM chef AS builder
 # Install system dependencies
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
+      cmake \
       libssl-dev \
       libsasl2-dev \
       pkg-config && \

@@ -47,7 +47,7 @@
 
 mod audit_handlers;
 mod auth;
-mod custom_metrics;
+pub mod custom_metrics;
 mod dashboard_dto;
 mod dashboard_handlers;
 mod dto;

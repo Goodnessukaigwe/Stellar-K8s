@@ -231,7 +231,8 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
     };
     let audit_recorder = Arc::new(controller::AuditRecorder::new(
         audit_log.clone(),
-        audit_sink.clone(),
+        audit_sink.into_iter().collect(),
+        None,
     ));
     let anomaly_detector = Arc::new(controller::AnomalyDetector::new(
         operator_config.anomaly_detection.clone(),
@@ -262,7 +263,6 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
         audit_log: audit_log.clone(),
         audit_recorder: audit_recorder.clone(),
         anomaly_detector: anomaly_detector.clone(),
-        audit_log: Arc::new(controller::AuditLog::new()),
         plugin_registry: Arc::new(stellar_k8s::plugin_sdk::PluginRegistry::new()),
         #[cfg(feature = "rest-api")]
         oidc_config,

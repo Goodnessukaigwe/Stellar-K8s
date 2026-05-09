@@ -162,6 +162,9 @@ mod tests {
                 priority: 50,
                 port: None,
                 enabled: true,
+                kubeconfig_secret_key: "kubeconfig".to_string(),
+                kubeconfig_secret_ref: "secret".to_string(),
+                target_namespace: None,
             },
             PeerClusterConfig {
                 cluster_id: "us-east-1".to_string(),
@@ -171,6 +174,9 @@ mod tests {
                 priority: 150,
                 port: None,
                 enabled: true,
+                kubeconfig_secret_key: "kubeconfig".to_string(),
+                kubeconfig_secret_ref: "secret".to_string(),
+                target_namespace: None,
             },
             PeerClusterConfig {
                 cluster_id: "ap-south-1".to_string(),
@@ -180,6 +186,9 @@ mod tests {
                 priority: 100,
                 port: None,
                 enabled: true,
+                kubeconfig_secret_key: "kubeconfig".to_string(),
+                kubeconfig_secret_ref: "secret".to_string(),
+                target_namespace: None,
             },
         ];
 
@@ -202,6 +211,9 @@ mod tests {
                 priority: 100,
                 port: None,
                 enabled: true,
+                kubeconfig_secret_key: "kubeconfig".to_string(),
+                kubeconfig_secret_ref: "secret".to_string(),
+                target_namespace: None,
             },
             PeerClusterConfig {
                 cluster_id: "us-west-1".to_string(),
@@ -211,6 +223,9 @@ mod tests {
                 priority: 80,
                 port: None,
                 enabled: false, // disabled – should be skipped
+                kubeconfig_secret_key: "kubeconfig".to_string(),
+                kubeconfig_secret_ref: "secret".to_string(),
+                target_namespace: None,
             },
         ];
 

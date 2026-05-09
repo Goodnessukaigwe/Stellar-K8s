@@ -54,6 +54,8 @@ pub enum StellarMetricType {
     ActiveConnections,
     /// Horizon request queue length
     HorizonQueueLength,
+    /// Requests per second (alias for TPS)
+    RequestsPerSecond,
 }
 
 impl StellarMetricType {
@@ -77,13 +79,15 @@ impl StellarMetricType {
             }
             // Ingestion lag
             "stellar_ingestion_lag" | "ingestion_lag" => Some(StellarMetricType::IngestionLag),
-            // Active connections
-            "stellar_horizon_tps" | "requests_per_second" => {
+            // Requests per second (alias for TPS via different naming convention)
+            "requests_per_second" => {
                 Some(StellarMetricType::RequestsPerSecond)
             }
-            "stellar_queue_length" | "queue_length" | "horizon_queue_length" => {
+            // Horizon-specific queue length
+            "horizon_queue_length" => {
                 Some(StellarMetricType::HorizonQueueLength)
             }
+            // Active connections
             "stellar_active_connections" | "active_connections" => {
                 Some(StellarMetricType::ActiveConnections)
             }
@@ -118,6 +122,12 @@ impl StellarMetricType {
                 "Lag in ledgers between the network tip and this node"
             }
             StellarMetricType::ActiveConnections => "Number of active peer or client connections",
+            StellarMetricType::HorizonQueueLength => {
+                "Horizon-specific request queue depth"
+            }
+            StellarMetricType::RequestsPerSecond => {
+                "Requests per second handled by Horizon"
+            }
         }
     }
 
@@ -248,9 +258,20 @@ fn get_metric_value(
                 debug!("Fetching TPS from store for {}/{}", namespace, name);
                 store.tps(namespace, name)
             }
+            StellarMetricType::RequestsPerSecond => {
+                debug!("Fetching requests_per_second from store for {}/{}", namespace, name);
+                store.tps(namespace, name)
+            }
             StellarMetricType::QueueLength => {
                 debug!(
                     "Fetching queue_length from store for {}/{}",
+                    namespace, name
+                );
+                store.queue_length(namespace, name)
+            }
+            StellarMetricType::HorizonQueueLength => {
+                debug!(
+                    "Fetching horizon_queue_length from store for {}/{}",
                     namespace, name
                 );
                 store.queue_length(namespace, name)

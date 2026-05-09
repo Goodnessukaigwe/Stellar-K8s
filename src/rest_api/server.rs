@@ -96,7 +96,8 @@ pub async fn run_server(
         .route("/health", get(handlers::health))
         .route("/healthz", get(handlers::healthz))
         .route("/readyz", get(handlers::readyz))
-        .route("/livez", get(handlers::livez));
+        .route("/livez", get(handlers::livez))
+        .with_state(state.clone());
 
     let mut protected = Router::new()
         .route("/leader", get(handlers::leader_status))

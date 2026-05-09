@@ -25,7 +25,7 @@ pub struct FederatedCluster {
 }
 
 /// Federated StellarNode that spans multiple clusters
-#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq)]
+#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(
     group = "stellar.org",
     version = "v1alpha1",

@@ -121,11 +121,11 @@ async fn validate_k8s_token(
     let status = result.status;
     Ok(K8sAuthResult {
         authenticated: status.as_ref().and_then(|s| s.authenticated).unwrap_or(false),
-        username: status.as_ref().and_then(|s| s.user.clone()).map(|u| u.username),
+        username: status.as_ref().and_then(|s| s.user.clone()).and_then(|u| u.username),
         groups: status
             .as_ref()
             .and_then(|s| s.user.clone())
-            .map(|u| u.groups)
+            .and_then(|u| u.groups)
             .unwrap_or_default(),
     })
 }

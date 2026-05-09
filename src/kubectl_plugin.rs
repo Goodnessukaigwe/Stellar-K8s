@@ -665,8 +665,6 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("\nTotal: {} vulnerable pods", pods.len());
                     Ok(())
                 }
-                    Ok(())
-                }
             }
         }
         Commands::Federation { command } => {
@@ -1635,7 +1633,6 @@ mod tests {
         let stats = make_stats_from_nodes(&nodes);
         assert_eq!(stats.by_network["Mainnet"], 1);
         assert_eq!(stats.by_network["Testnet"], 1);
-    }
     }
 }
 

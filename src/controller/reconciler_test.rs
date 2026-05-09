@@ -293,6 +293,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
                     }),
                     enable_preflight: true,
                     max_events_per_request: 10000,
+                    cache_config: None,
                 }),
                 replicas: 3,
                 min_available: None,
@@ -354,7 +355,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
         let audit_log = Arc::new(AuditLog::new());
-        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), vec![], None));
         let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = Arc::new(ControllerState {
             client: client.clone(),
@@ -384,6 +385,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             oidc_config: None,
             #[cfg(feature = "rest-api")]
             metrics_store: Arc::new(StellarMetricsStore::new()),
+            plugin_registry: Arc::new(crate::plugin_sdk::PluginRegistry::new()),
         });
 
         // Test with a retriable error (network-related)
@@ -406,7 +408,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
         let audit_log = Arc::new(AuditLog::new());
-        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), vec![], None));
         let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = Arc::new(ControllerState {
             client: client.clone(),
@@ -436,6 +438,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             oidc_config: None,
             #[cfg(feature = "rest-api")]
             metrics_store: Arc::new(StellarMetricsStore::new()),
+            plugin_registry: Arc::new(crate::plugin_sdk::PluginRegistry::new()),
         });
 
         // Test with validation error (non-retriable)
@@ -457,7 +460,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
         let audit_log = Arc::new(AuditLog::new());
-        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), vec![], None));
         let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = Arc::new(ControllerState {
             client: client.clone(),
@@ -487,6 +490,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             oidc_config: None,
             #[cfg(feature = "rest-api")]
             metrics_store: Arc::new(StellarMetricsStore::new()),
+            plugin_registry: Arc::new(crate::plugin_sdk::PluginRegistry::new()),
         });
 
         let errors = vec![
@@ -700,7 +704,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
         let audit_log = Arc::new(AuditLog::new());
-        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), vec![], None));
         let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
         let state = ControllerState {
             client: client.clone(),
@@ -728,6 +732,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             audit_recorder,
             anomaly_detector,
             oidc_config: None,
+            #[cfg(feature = "rest-api")]
+            metrics_store: Arc::new(StellarMetricsStore::new()),
+            plugin_registry: Arc::new(crate::plugin_sdk::PluginRegistry::new()),
         };
 
         assert_eq!(state.operator_namespace, "test-namespace");
@@ -744,7 +751,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             .await
             .unwrap_or_else(|_| panic!("Cannot create test client"));
         let audit_log = Arc::new(AuditLog::new());
-        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), None));
+        let audit_recorder = Arc::new(AuditRecorder::new(audit_log.clone(), vec![], None));
         let anomaly_detector = Arc::new(AnomalyDetector::new(Default::default()));
 
         let state = ControllerState {
@@ -773,6 +780,9 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
             audit_recorder,
             anomaly_detector,
             oidc_config: None,
+            #[cfg(feature = "rest-api")]
+            metrics_store: Arc::new(StellarMetricsStore::new()),
+            plugin_registry: Arc::new(crate::plugin_sdk::PluginRegistry::new()),
         };
 
         assert!(
