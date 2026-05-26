@@ -268,14 +268,13 @@ pub static TRANSACTION_RESULT_TOTAL: Lazy<
 > = Lazy::new(Family::default);
 
 /// Histogram tracking Horizon migration duration in seconds
-pub static HORIZON_MIGRATION_DURATION_SECONDS: Lazy<
-    Family<HorizonMigrationLabels, Histogram>,
-> = Lazy::new(|| {
-    fn migration_histogram() -> Histogram {
-        Histogram::new(exponential_buckets(0.1, 2.0, 16))
-    }
-    Family::new_with_constructor(migration_histogram)
-});
+pub static HORIZON_MIGRATION_DURATION_SECONDS: Lazy<Family<HorizonMigrationLabels, Histogram>> =
+    Lazy::new(|| {
+        fn migration_histogram() -> Histogram {
+            Histogram::new(exponential_buckets(0.1, 2.0, 16))
+        }
+        Family::new_with_constructor(migration_histogram)
+    });
 
 /// Counter tracking Horizon migration results
 pub static HORIZON_MIGRATION_TOTAL: Lazy<Family<HorizonMigrationLabels, Counter<u64, AtomicU64>>> =

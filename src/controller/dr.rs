@@ -130,9 +130,7 @@ pub async fn reconcile_dr(
                     .active_peer_cluster_id
                     .as_deref()
                     .unwrap_or(&dr_config.peer_cluster_id);
-                let peer_ledger = fetch_peer_ledger_sequence(target_peer)
-                    .await
-                    .ok();
+                let peer_ledger = fetch_peer_ledger_sequence(target_peer).await.ok();
                 let local_ledger = node.status.as_ref().and_then(|s| s.ledger_sequence);
 
                 if let (Some(p), Some(l)) = (peer_ledger, local_ledger) {
@@ -254,7 +252,10 @@ pub async fn reconcile_multi_region(
     config: &crate::crd::MultiRegionConfig,
 ) -> Result<MultiRegionStatus> {
     let spec = &config.spec;
-    info!("Reconciling multi-region failover for {}", config.name_any());
+    info!(
+        "Reconciling multi-region failover for {}",
+        config.name_any()
+    );
 
     let mut status = MultiRegionStatus {
         current_primary: spec.primary_cluster.clone(),
@@ -272,11 +273,17 @@ pub async fn reconcile_multi_region(
     if spec.failover_policy == FailoverPolicy::Automated {
         let primary_health = status.cluster_health.get(&spec.primary_cluster);
         if let Some(ClusterHealthStatus::Unreachable) = primary_health {
-            warn!("Primary cluster {} is unreachable. Orchestrating failover...", spec.primary_cluster);
-            
+            warn!(
+                "Primary cluster {} is unreachable. Orchestrating failover...",
+                spec.primary_cluster
+            );
+
             // Select next best cluster
             if let Some(new_primary) = select_new_primary(&spec.clusters, &status.cluster_health) {
-                info!("Failing over from {} to {}", spec.primary_cluster, new_primary);
+                info!(
+                    "Failing over from {} to {}",
+                    spec.primary_cluster, new_primary
+                );
                 status.current_primary = new_primary;
                 status.last_failover_time = Some(Utc::now());
             }
@@ -291,9 +298,15 @@ pub async fn reconcile_multi_region(
     Ok(status)
 }
 
-async fn check_cluster_health(_client: &Client, cluster: &crate::crd::ClusterConfig) -> ClusterHealthStatus {
+async fn check_cluster_health(
+    _client: &Client,
+    cluster: &crate::crd::ClusterConfig,
+) -> ClusterHealthStatus {
     // In a real implementation, this would probe the remote cluster's API or a health check endpoint
-    debug!("Checking health of cluster {} at {}", cluster.name, cluster.api_endpoint);
+    debug!(
+        "Checking health of cluster {} at {}",
+        cluster.name, cluster.api_endpoint
+    );
     ClusterHealthStatus::Healthy
 }
 
@@ -301,7 +314,8 @@ fn select_new_primary(
     clusters: &[crate::crd::ClusterConfig],
     health: &std::collections::BTreeMap<String, ClusterHealthStatus>,
 ) -> Option<String> {
-    clusters.iter()
+    clusters
+        .iter()
         .filter(|c| health.get(&c.name) == Some(&ClusterHealthStatus::Healthy))
         .map(|c| c.name.clone())
         .next()
