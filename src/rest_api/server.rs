@@ -28,6 +28,7 @@ use super::handlers;
 use super::health_summary;
 use super::job_handlers;
 use super::scp_topology;
+use super::stellar_metrics_server;
 
 /// Build a rustls ServerConfig from PEM data (cert, key, CA for client verification).
 /// Used for initial server setup and after certificate rotation to reload without restart.
@@ -159,18 +160,18 @@ pub async fn run_server(
         // Discovery endpoint — required by the HPA aggregation layer
         .route(
             "/apis/custom.metrics.k8s.io/v1beta2",
-            get(custom_metrics::get_metrics_discovery),
+            get(stellar_metrics_server::api_discovery),
         )
         .route(
             "/apis/custom.metrics.k8s.io/v1beta2/namespaces/:namespace/pods/:name/:metric",
-            get(custom_metrics::get_pod_metric),
+            get(stellar_metrics_server::get_pod_stellar_metric),
         )
         .route(
             "/apis/custom.metrics.k8s.io/v1beta2/namespaces/:namespace/stellarnodes.stellar.org/:name/:metric",
-            get(custom_metrics::get_stellar_node_metric),
+            get(stellar_metrics_server::get_stellarnode_metric),
         )
         .layer(middleware::from_fn_with_state(state.clone(), auth::api_reader))
-        // Horizon-specific convenience endpoint
+        // Horizon-specific convenience endpoint (legacy path kept for compatibility)
         .route(
             "/apis/custom.metrics.k8s.io/v1beta2/namespaces/:namespace/horizons.stellar.org/:name/:metric",
             get(custom_metrics::get_horizon_metric),
