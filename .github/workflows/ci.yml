@@ -369,7 +369,7 @@ jobs:
             --timeout 300 \
             --exclude-files tests/* \
             --ignore-panics \
-            --ignore-timeouts
+            --ignore-tests
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
