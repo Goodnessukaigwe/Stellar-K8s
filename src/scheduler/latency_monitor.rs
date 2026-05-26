@@ -149,7 +149,10 @@ impl LatencyMonitor {
         let pods: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
         match pods.evict(pod_name, &EvictParams::default()).await {
             Ok(_) => {
-                info!("Evicted pod {}/{} for latency optimization", namespace, pod_name);
+                info!(
+                    "Evicted pod {}/{} for latency optimization",
+                    namespace, pod_name
+                );
                 Ok(())
             }
             Err(e) => {
@@ -175,13 +178,10 @@ impl LatencyMonitor {
 }
 
 fn is_proximity_validator(pod: &Pod) -> bool {
-    pod.metadata
-        .labels
-        .as_ref()
-        .is_some_and(|labels| {
-            labels.get("stellar.org/node-type").map(|s| s.as_str()) == Some("Validator")
-                && labels.contains_key("app.kubernetes.io/instance")
-        })
+    pod.metadata.labels.as_ref().is_some_and(|labels| {
+        labels.get("stellar.org/node-type").map(|s| s.as_str()) == Some("Validator")
+            && labels.contains_key("app.kubernetes.io/instance")
+    })
 }
 
 #[cfg(test)]
