@@ -138,6 +138,10 @@ pub async fn run_server(
             get(dashboard_handlers::get_node_conditions),
         )
         .route(
+            "/api/v1/dashboard/nodes/:namespace/:name/dr",
+            get(dashboard_handlers::get_dr_status),
+        )
+        .route(
             "/api/v1/dashboard/nodes/:namespace/:name/metrics",
             get(dashboard_handlers::get_node_metrics),
         )

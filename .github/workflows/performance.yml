@@ -1,0 +1,141 @@
+name: Continuous Benchmarking
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CLUSTER_NAME: stellar-perf
+  OPERATOR_NAMESPACE: stellar-system
+  IMAGE_TAG: perf-test
+
+jobs:
+  performance:
+    name: Operator Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key: "perf-build"
+
+      - name: Build operator binary
+        run: cargo build --release --locked --bin stellar-operator
+
+      - name: Setup kind cluster
+        uses: ./.github/actions/setup-kind-cluster
+        with:
+          cluster-name: ${{ env.CLUSTER_NAME }}
+          image-tag: ${{ env.IMAGE_TAG }}
+          operator-namespace: ${{ env.OPERATOR_NAMESPACE }}
+          worker-nodes: "1"
+          operator-cpu-request: "500m"
+          operator-memory-request: "512Mi"
+
+      - name: Install k6
+        run: |
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run Benchmarks
+        env:
+          OPERATOR_NAMESPACE: ${{ env.OPERATOR_NAMESPACE }}
+          RUN_ID: ${{ github.run_id }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Set up port forwarding to operator
+          kubectl port-forward -n ${{ env.OPERATOR_NAMESPACE }} deployment/stellar-operator 8080:8080 &
+          PF_PID=$!
+          
+          # Set up proxy for K8s API
+          kubectl proxy --port=8001 &
+          PROXY_PID=$!
+          
+          sleep 5
+          
+          mkdir -p results
+          
+          # Run k6 benchmarks
+          k6 run \
+            --env BASE_URL=http://localhost:8080 \
+            --env K8S_API_URL=http://localhost:8001 \
+            --env NAMESPACE=perf-test \
+            --env RUN_ID=${{ github.run_id }} \
+            --out json=results/benchmarks.json \
+            benchmarks/k6/comprehensive-perf.js
+          
+          kill $PF_PID $PROXY_PID
+          
+      - name: Compare with Baseline
+        id: compare
+        run: |
+          python3 benchmarks/scripts/compare_benchmarks.py compare \
+            --current results/benchmarks.json \
+            --baseline benchmarks/baselines/v0.1.0.json \
+            --threshold 15 \
+            --output results/comparison.json \
+            --fail-on-regression
+        continue-on-error: true
+
+      - name: Generate Performance Report
+        run: |
+          # Use a simple python script to generate an HTML report from the JSON
+          python3 benchmarks/scripts/generate_report.py \
+            --results results/benchmarks.json \
+            --comparison results/comparison.json \
+            --output results/report.html
+
+      - name: Upload Performance Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results-${{ github.run_id }}
+          path: results/
+          retention-days: 30
+
+      - name: Comment PR with Performance Summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const comparison = JSON.parse(fs.readFileSync('results/comparison.json', 'utf8'));
+            
+            let body = `### 📊 Performance Benchmark Results\n\n`;
+            body += `${comparison.summary}\n\n`;
+            
+            if (comparison.regressions.length > 0) {
+              body += `#### ⚠️ Regressions Detected\n\n`;
+              body += `| Metric | Current | Baseline | Change |\n`;
+              body += `| :--- | :--- | :--- | :--- |\n`;
+              comparison.regressions.forEach(r => {
+                body += `| ${r.metric} | ${r.current} | ${r.baseline} | ${r.change_pct}% |\n`;
+              });
+              body += `\n`;
+            }
+            
+            if (comparison.improvements.length > 0) {
+              body += `#### ✅ Improvements\n\n`;
+              body += `| Metric | Current | Baseline | Change |\n`;
+              body += `| :--- | :--- | :--- | :--- |\n`;
+              comparison.improvements.forEach(i => {
+                body += `| ${i.metric} | ${i.current} | ${i.baseline} | ${i.change_pct}% |\n`;
+              });
+              body += `\n`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

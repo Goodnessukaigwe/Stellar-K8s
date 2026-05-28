@@ -37,7 +37,7 @@
 //!
 //! This guarantees that a replica never reads a partially-written ledger state.
 
-use crate::crd::StellarNode;
+use crate::crd::{DisasterRecoveryPolicy, StellarNode};
 use crate::error::{Error, Result};
 use k8s_openapi::api::core::v1::{ConfigMap, Pod, Secret};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
@@ -457,6 +457,25 @@ impl CrossRegionSyncController {
         }
 
         statuses
+    }
+
+    /// Check if the current sync status meets RPO requirements from a policy.
+    pub async fn check_rpo_compliance(
+        &self,
+        namespace: &str,
+        primary_ledger: u64,
+        policy: &DisasterRecoveryPolicy,
+    ) -> Result<bool> {
+        let statuses = self.check_replication_lag(namespace, primary_ledger).await;
+
+        // RPO in ledgers (assuming 5s per ledger)
+        let rpo_target_ledgers = policy.spec.rpo_seconds as i64 / 5;
+
+        let compliant = statuses
+            .iter()
+            .all(|s| s.replication_lag_ledgers <= rpo_target_ledgers);
+
+        Ok(compliant)
     }
 
     /// Perform automated failover: promote the replica with the highest synced

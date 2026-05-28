@@ -20,9 +20,51 @@ use super::dashboard_dto::{
     LogAnalyticsResponse, LogPatternDto, MetricsSummary, NetworkBreakdown, NodeAction,
     NodeActionRequest, NodeActionResponse, NodeConditionsResponse, NodeLogsResponse,
     NodeTypeBreakdown, OperatorLogsResponse, SecurityPostureResponse,
-    CapacityPlanningResponse, WhatIfRequest,
+    CapacityPlanningResponse, WhatIfRequest, DRStatusResponse,
 };
 use super::dto::ErrorResponse;
+
+/// Get DR status for a node
+#[instrument(skip(state))]
+pub async fn get_dr_status(
+    State(state): State<Arc<ControllerState>>,
+    Path((namespace, name)): Path<(String, String)>,
+) -> Result<Json<DRStatusResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let api: Api<StellarNode> = Api::namespaced(state.client.clone(), &namespace);
+
+    match api.get(&name).await {
+        Ok(node) => {
+            let dr_config = node.spec.dr_config.as_ref();
+            let dr_status = node.status.as_ref().and_then(|s| s.dr_status.as_ref());
+
+            Ok(Json(DRStatusResponse {
+                namespace,
+                name,
+                dr_enabled: dr_config.map(|c| c.enabled).unwrap_or(false),
+                current_role: dr_status.and_then(|s| s.current_role.as_ref().map(|r| format!("{:?}", r))),
+                failover_active: dr_status.map(|s| s.failover_active).unwrap_or(false),
+                last_failover_time: dr_status.and_then(|s| s.last_failover_time.clone()),
+                sync_lag: dr_status.and_then(|s| s.sync_lag),
+                compliance_status: None, // Would fetch from DisasterRecoveryPolicy if needed
+                last_drill_result: dr_status.and_then(|s| s.last_drill_result.clone()),
+            }))
+        }
+        Err(kube::Error::Api(e)) if e.code == 404 => Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse::new(
+                "not_found",
+                &format!("Node {namespace}/{name} not found"),
+            )),
+        )),
+        Err(e) => {
+            error!("Failed to get DR status: {:?}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse::new("get_failed", &e.to_string())),
+            ))
+        }
+    }
+}
 
 /// Get log analytics summary
 pub async fn log_analytics(

@@ -2,7 +2,21 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::crd::Condition;
+use crate::crd::{Condition, DRDrillResult};
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DRStatusResponse {
+    pub namespace: String,
+    pub name: String,
+    pub dr_enabled: bool,
+    pub current_role: Option<String>,
+    pub failover_active: bool,
+    pub last_failover_time: Option<String>,
+    pub sync_lag: Option<u64>,
+    pub compliance_status: Option<String>,
+    pub last_drill_result: Option<DRDrillResult>,
+}
 
 /// Dashboard overview response
 #[derive(Debug, Serialize)]
