@@ -9,10 +9,9 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use crate::cli::RunArgs;
 use stellar_k8s::log_scrub::ScrubLayer;
+use stellar_k8s::logging::{analytics::AnalyticsEngine, sampling::SamplingConfig, AnalyticsLayer};
 #[cfg(feature = "rest-api")]
 use stellar_k8s::rest_api::metrics_store::StellarMetricsStore;
-use stellar_k8s::log_scrub::ScrubLayer;
-use stellar_k8s::logging::{AnalyticsLayer, analytics::AnalyticsEngine, sampling::SamplingConfig};
 use stellar_k8s::{controller, preflight, Error};
 
 const LEASE_NAME: &str = "stellar-operator-leader";

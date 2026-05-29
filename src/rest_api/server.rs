@@ -129,6 +129,7 @@ pub async fn run_server(
         .route("/api/v1/security/posture", get(dashboard_handlers::security_posture))
         .route("/api/v1/capacity/plan", get(dashboard_handlers::capacity_planning))
         .route("/api/v1/capacity/what-if", axum::routing::post(dashboard_handlers::run_what_if))
+        .route("/api/v1/traffic/dashboard", get(dashboard_handlers::traffic_dashboard))
         .route(
             "/api/v1/dashboard/nodes/:namespace/:name/logs",
             get(dashboard_handlers::get_node_logs),

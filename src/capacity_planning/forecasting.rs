@@ -21,7 +21,11 @@ impl Forecaster {
     }
 
     /// Predicts future resource usage based on historical data
-    pub fn forecast(&self, history: &[ResourceUsage], horizon_days: u32) -> Vec<(DateTime<Utc>, f64)> {
+    pub fn forecast(
+        &self,
+        history: &[ResourceUsage],
+        horizon_days: u32,
+    ) -> Vec<(DateTime<Utc>, f64)> {
         if history.is_empty() {
             return Vec::new();
         }
@@ -33,7 +37,11 @@ impl Forecaster {
         }
     }
 
-    fn linear_forecast(&self, history: &[ResourceUsage], horizon_days: u32) -> Vec<(DateTime<Utc>, f64)> {
+    fn linear_forecast(
+        &self,
+        history: &[ResourceUsage],
+        horizon_days: u32,
+    ) -> Vec<(DateTime<Utc>, f64)> {
         // Simple linear regression: y = mx + b
         let n = history.len() as f64;
         let mut sum_x = 0.0;
@@ -59,7 +67,8 @@ impl Forecaster {
         let mut forecast = Vec::new();
 
         for day in 1..=horizon_days {
-            let x = ((last_time + Duration::days(day as i64)).timestamp() as f64 - start_time) / 86400.0;
+            let x = ((last_time + Duration::days(day as i64)).timestamp() as f64 - start_time)
+                / 86400.0;
             let y = m * x + b;
             forecast.push((last_time + Duration::days(day as i64), y));
         }
@@ -67,7 +76,11 @@ impl Forecaster {
         forecast
     }
 
-    fn exponential_forecast(&self, history: &[ResourceUsage], horizon_days: u32) -> Vec<(DateTime<Utc>, f64)> {
+    fn exponential_forecast(
+        &self,
+        history: &[ResourceUsage],
+        horizon_days: u32,
+    ) -> Vec<(DateTime<Utc>, f64)> {
         // y = a * e^(bx) -> ln(y) = ln(a) + bx
         // We reuse linear regression on ln(y)
         let n = history.len() as f64;
@@ -96,7 +109,8 @@ impl Forecaster {
         let mut forecast = Vec::new();
 
         for day in 1..=horizon_days {
-            let x = ((last_time + Duration::days(day as i64)).timestamp() as f64 - start_time) / 86400.0;
+            let x = ((last_time + Duration::days(day as i64)).timestamp() as f64 - start_time)
+                / 86400.0;
             let y = a * (b * x).exp();
             forecast.push((last_time + Duration::days(day as i64), y));
         }
@@ -104,7 +118,11 @@ impl Forecaster {
         forecast
     }
 
-    fn holt_winters_forecast(&self, _history: &[ResourceUsage], _horizon_days: u32) -> Vec<(DateTime<Utc>, f64)> {
+    fn holt_winters_forecast(
+        &self,
+        _history: &[ResourceUsage],
+        _horizon_days: u32,
+    ) -> Vec<(DateTime<Utc>, f64)> {
         // Placeholder for more complex seasonal forecasting
         // In a real implementation, this would use double/triple exponential smoothing
         Vec::new()
