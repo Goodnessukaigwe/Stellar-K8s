@@ -128,8 +128,11 @@ mod snapshot;
 pub mod snapshot_worker;
 pub mod soroban_cache;
 pub mod spot_drain;
+pub mod snapshot_worker;
+pub mod cross_region_sync;
 pub mod storage_migration;
 pub(crate) mod sync_scale;
+pub mod volume_resizer;
 pub(crate) mod sync_state_monitor;
 pub mod traffic;
 #[cfg(test)]
@@ -206,3 +209,5 @@ pub use webhook_delivery::{
     DeliveryRecord, WebhookDeliveryService, WebhookEndpoint, WebhookEvent, WebhookEventType,
 };
 pub mod ml_pipeline;
+pub mod observability_pipeline;
+pub mod observability_dashboard;
