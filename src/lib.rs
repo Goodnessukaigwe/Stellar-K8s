@@ -70,6 +70,7 @@ pub mod canary_deployment;
 pub mod capacity_planning;
 pub mod carbon_aware;
 pub mod config_mgmt;
+pub mod compliance;
 pub mod consensus_monitoring;
 pub mod controller;
 pub mod crd;
