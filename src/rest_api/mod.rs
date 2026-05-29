@@ -45,6 +45,7 @@
 //!   --cert client.crt --key client.key --cacert ca.crt
 //! ```
 
+mod compliance_handlers;
 mod audit_handlers;
 mod auth;
 pub mod custom_metrics;

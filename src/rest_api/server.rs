@@ -20,6 +20,7 @@ use tracing::info;
 use crate::controller::ControllerState;
 use crate::{Error, Result};
 
+use super::compliance_handlers;
 use super::audit_handlers;
 use super::auth;
 use super::custom_metrics;
@@ -120,6 +121,14 @@ pub async fn run_server(
         )
         // Compliance report
         .route("/api/v1/compliance/report", get(handlers::compliance_report))
+        .route(
+            "/api/v1/compliance/regulatory-report",
+            get(compliance_handlers::regulatory_compliance_report),
+        )
+        .route(
+            "/api/v1/compliance/status",
+            get(compliance_handlers::compliance_status),
+        )
         // Dashboard routes
         .route("/", get(dashboard_ui))
         .route("/api/v1/dashboard/overview", get(dashboard_handlers::dashboard_overview))
