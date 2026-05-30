@@ -560,3 +560,15 @@ scpAnalytics:
       requests:
         cpu: 200m
         memory: 256Mi
+
+# Helm hooks configuration
+hooks:
+  # Pre-install hook - runs validation checks before first installation
+  preInstall:
+    enabled: true
+  
+  # Pre-upgrade hook - runs safety checks and creates backup before upgrade
+  preUpgrade:
+    enabled: true
+    # Enable rollback capability verification
+    enableRollbackCheck: true
