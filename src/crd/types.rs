@@ -2236,9 +2236,11 @@ pub struct DbMaintenanceConfig {
 
     /// Maintenance window start time (24h format, e.g., "02:00")
     /// Maintenance will only trigger during this window
+    #[serde(default = "default_window_start")]
     pub window_start: String,
 
     /// Maintenance window duration (e.g., "2h")
+    #[serde(default = "default_window_duration")]
     pub window_duration: String,
 
     /// Bloat threshold percentage to trigger VACUUM FULL (default: 30)
@@ -2249,6 +2251,18 @@ pub struct DbMaintenanceConfig {
     #[serde(default = "default_true")]
     pub auto_reindex: bool,
 
+    /// Automatically profile slow SQL and suggest indexes during maintenance.
+    #[serde(default = "default_false")]
+    pub enable_query_profiling: bool,
+
+    /// Automatically create missing indexes for slow queries.
+    #[serde(default = "default_false")]
+    pub auto_index_maintenance: bool,
+
+    /// Slow query threshold in milliseconds used to identify candidate queries.
+    #[serde(default = "default_slow_query_threshold_ms")]
+    pub slow_query_threshold_ms: u32,
+
     /// Coordination with read-pool for zero-downtime
     #[serde(default = "default_true")]
     pub read_pool_coordination: bool,
@@ -2256,6 +2270,22 @@ pub struct DbMaintenanceConfig {
 
 fn default_bloat_threshold() -> u32 {
     30
+}
+
+fn default_window_start() -> String {
+    "02:00".to_string()
+}
+
+fn default_window_duration() -> String {
+    "2h".to_string()
+}
+
+fn default_slow_query_threshold_ms() -> u32 {
+    100
+}
+
+fn default_false() -> bool {
+    false
 }
 
 fn default_pooler_replicas() -> i32 {
