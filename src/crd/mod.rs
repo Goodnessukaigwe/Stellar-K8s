@@ -3,6 +3,7 @@
 //! This module defines the Kubernetes CRDs for managing Stellar infrastructure.
 
 mod cnpg;
+pub mod chaos_experiment;
 pub mod read_replica;
 pub mod seed_secret;
 pub mod service_mesh;

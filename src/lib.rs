@@ -5,6 +5,7 @@
 
 pub mod backup;
 pub mod carbon_aware;
+pub mod chaos;
 pub mod controller;
 pub mod crd;
 pub mod error;
