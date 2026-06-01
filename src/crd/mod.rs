@@ -56,7 +56,11 @@ pub mod schema_utils;
 pub mod secret_policy;
 pub mod seed_secret;
 pub mod service_mesh;
+pub mod stellar_autoscaler;
 pub mod stellar_benchmark;
+pub mod stellar_federation;
+pub mod stellar_observability;
+pub mod stellar_upgrade;
 mod stellar_node;
 pub mod tenant;
 pub mod traffic_policy;
@@ -93,6 +97,24 @@ pub use stellar_benchmark::{
     BenchmarkReportStatus, BenchmarkResourceRequirements, BenchmarkSummary,
     EnvVar as BenchmarkEnvVar, PodResult, ResultStorage, StellarBenchmark, StellarBenchmarkSpec,
     StellarBenchmarkStatus, Toleration as BenchmarkToleration,
+};
+pub use stellar_federation::{
+    FederationCluster, ReplicationConfig, ReplicationMode, RoutingStrategy,
+    StellarFederation, StellarFederationSpec, StellarFederationStatus, TrafficRoutingPolicy,
+};
+pub use stellar_autoscaler::{
+    CanaryStrategy, CostAwareConfig, MetricType, PredictionModel, PredictiveScalingConfig,
+    ScalingPolicy, ScalingStrategy, StellarAutoscaler, StellarAutoscalerSpec,
+    StellarAutoscalerStatus, StellarMetric,
+};
+pub use stellar_upgrade::{
+    CanaryStrategy as UpgradeCanaryStrategy, HealthValidation, RollbackPolicy, StellarUpgrade,
+    StellarUpgradeSpec, StellarUpgradeStatus, UpgradePhase,
+};
+pub use stellar_observability::{
+    AnomalyDetectionConfig, AnomalyModel, AnomalySensitivity, AlertingConfig, AlertRule,
+    LoggingBackend, LoggingConfig, StellarObservability, StellarObservabilitySpec,
+    StellarObservabilityStatus, TracingBackend, TracingConfig,
 };
 pub use stellar_node::{
     BGPStatus, SnapshotBootstrapStatus, SpecValidationError, StellarNode, StellarNodeSpec,
