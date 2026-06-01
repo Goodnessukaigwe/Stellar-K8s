@@ -133,6 +133,7 @@ mod snapshot;
 pub mod snapshot_worker;
 pub mod soroban_cache;
 pub mod spot_drain;
+pub mod topology;
 pub mod storage_migration;
 pub(crate) mod sync_scale;
 pub(crate) mod sync_state_monitor;
