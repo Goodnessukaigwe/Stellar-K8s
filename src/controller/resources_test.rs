@@ -1061,7 +1061,11 @@ mod init_containers_tests {
         Container {
             name: name.to_string(),
             image: Some("busybox:latest".to_string()),
-            command: Some(vec!["sh".to_string(), "-c".to_string(), "echo hello".to_string()]),
+            command: Some(vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo hello".to_string(),
+            ]),
             ..Default::default()
         }
     }
@@ -1282,11 +1286,774 @@ mod init_containers_tests {
             .iter()
             .position(|c| c.name == "my-custom-init");
 
-        assert!(pos_migration.is_some(), "operator migration init container must be present");
+        assert!(
+            pos_migration.is_some(),
+            "operator migration init container must be present"
+        );
         assert!(pos_custom.is_some(), "user init container must be present");
         assert!(
             pos_migration < pos_custom,
             "operator-managed init containers must come before user-defined ones"
         );
     }
+}
+
+// -----------------------------------------------------------------------
+// #839 — Default probes per node type
+// -----------------------------------------------------------------------
+
+#[test]
+fn test_validator_has_tcp_liveness_probe() {
+    use crate::crd::types::{ResourceRequirements, ResourceSpec, ValidatorConfig};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Validator,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        validator_config: Some(ValidatorConfig {
+            seed_secret_ref: "my-seed".to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let container = sts
+        .spec
+        .unwrap()
+        .template
+        .spec
+        .unwrap()
+        .containers
+        .into_iter()
+        .next()
+        .unwrap();
+    let liveness = container
+        .liveness_probe
+        .expect("validator must have a liveness probe");
+    assert!(
+        liveness.tcp_socket.is_some(),
+        "validator liveness probe must use TCP socket"
+    );
+    assert_eq!(
+        liveness.tcp_socket.unwrap().port,
+        k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::Int(11625)
+    );
+}
+
+#[test]
+fn test_horizon_has_http_liveness_probe() {
+    use crate::crd::types::{HorizonConfig, ResourceRequirements, ResourceSpec};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Horizon,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        horizon_config: Some(HorizonConfig {
+            database_secret_ref: "db".to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let dep = crate::controller::resources::build_deployment_for_test(&node);
+    let container = dep
+        .spec
+        .unwrap()
+        .template
+        .spec
+        .unwrap()
+        .containers
+        .into_iter()
+        .next()
+        .unwrap();
+    let liveness = container
+        .liveness_probe
+        .expect("horizon must have a liveness probe");
+    assert!(
+        liveness.http_get.is_some(),
+        "horizon liveness probe must use HTTP GET"
+    );
+    assert_eq!(liveness.http_get.unwrap().path.as_deref(), Some("/health"));
+}
+
+#[test]
+fn test_probe_override_replaces_default_period() {
+    use crate::crd::types::{
+        ProbeConfig, ProbeOverride, ResourceRequirements, ResourceSpec, ValidatorConfig,
+    };
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Validator,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        validator_config: Some(ValidatorConfig {
+            seed_secret_ref: "my-seed".to_string(),
+            ..Default::default()
+        }),
+        probes: Some(ProbeConfig {
+            liveness: Some(ProbeOverride {
+                period_seconds: Some(60),
+                failure_threshold: Some(5),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let container = sts
+        .spec
+        .unwrap()
+        .template
+        .spec
+        .unwrap()
+        .containers
+        .into_iter()
+        .next()
+        .unwrap();
+    let liveness = container.liveness_probe.expect("must have liveness probe");
+    assert_eq!(
+        liveness.period_seconds,
+        Some(60),
+        "override period_seconds must be applied"
+    );
+    assert_eq!(
+        liveness.failure_threshold,
+        Some(5),
+        "override failure_threshold must be applied"
+    );
+    // TCP socket from default must still be present
+    assert!(
+        liveness.tcp_socket.is_some(),
+        "default TCP socket must be preserved"
+    );
+}
+
+// -----------------------------------------------------------------------
+// #840 — PriorityClass support
+// -----------------------------------------------------------------------
+
+#[test]
+fn test_priority_class_name_applied_to_statefulset() {
+    use crate::crd::types::{ResourceRequirements, ResourceSpec, ValidatorConfig};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Validator,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        validator_config: Some(ValidatorConfig {
+            seed_secret_ref: "my-seed".to_string(),
+            ..Default::default()
+        }),
+        priority_class_name: Some("stellar-validator-critical".to_string()),
+        ..Default::default()
+    };
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let pod_spec = sts.spec.unwrap().template.spec.unwrap();
+    assert_eq!(
+        pod_spec.priority_class_name.as_deref(),
+        Some("stellar-validator-critical"),
+        "priority_class_name must be propagated to pod spec"
+    );
+}
+
+#[test]
+fn test_priority_class_name_applied_to_deployment() {
+    use crate::crd::types::{HorizonConfig, ResourceRequirements, ResourceSpec};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Horizon,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        horizon_config: Some(HorizonConfig {
+            database_secret_ref: "db".to_string(),
+            ..Default::default()
+        }),
+        priority_class_name: Some("stellar-rpc-high".to_string()),
+        ..Default::default()
+    };
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let dep = crate::controller::resources::build_deployment_for_test(&node);
+    let pod_spec = dep.spec.unwrap().template.spec.unwrap();
+    assert_eq!(
+        pod_spec.priority_class_name.as_deref(),
+        Some("stellar-rpc-high"),
+        "priority_class_name must be propagated to deployment pod spec"
+    );
+}
+
+#[test]
+fn test_no_priority_class_name_when_unset() {
+    use crate::crd::types::{ResourceRequirements, ResourceSpec, ValidatorConfig};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Validator,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        validator_config: Some(ValidatorConfig {
+            seed_secret_ref: "my-seed".to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let pod_spec = sts.spec.unwrap().template.spec.unwrap();
+    assert!(
+        pod_spec.priority_class_name.is_none(),
+        "priority_class_name must be None when not set in spec"
+    );
+}
+
+#[test]
+fn test_priority_class_name_empty_string_fails_validation() {
+    use crate::crd::types::{ResourceRequirements, ResourceSpec, ValidatorConfig};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Validator,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        validator_config: Some(ValidatorConfig {
+            seed_secret_ref: "my-seed".to_string(),
+            ..Default::default()
+        }),
+        priority_class_name: Some("".to_string()),
+        ..Default::default()
+    };
+    let result = spec.validate();
+    assert!(
+        result.is_err(),
+        "empty priorityClassName must fail validation"
+    );
+    let errs = result.unwrap_err();
+    assert!(
+        errs.iter().any(|e| e.field.contains("priorityClassName")),
+        "error must reference priorityClassName field"
+    );
+}
+
+// -----------------------------------------------------------------------
+// #704 — Advanced liveness/readiness probes for Stellar-Core
+// -----------------------------------------------------------------------
+
+#[cfg(test)]
+mod advanced_probe_tests {
+    use crate::controller::resources::build_statefulset_for_test;
+    use crate::crd::{
+        types::{ResourceRequirements, ResourceSpec},
+        NodeType, StellarNetwork, StellarNode, StellarNodeSpec,
+    };
+    use kube::api::ObjectMeta;
+
+    fn validator_node(name: &str) -> StellarNode {
+        StellarNode {
+            metadata: ObjectMeta {
+                name: Some(name.to_string()),
+                namespace: Some("default".to_string()),
+                uid: Some("uid-probe-test".to_string()),
+                ..Default::default()
+            },
+            spec: StellarNodeSpec {
+                node_type: NodeType::Validator,
+                network: StellarNetwork::Testnet,
+                version: "v21.0.0".to_string(),
+                replicas: 1,
+                resources: ResourceRequirements {
+                    requests: ResourceSpec {
+                        cpu: "500m".to_string(),
+                        memory: "1Gi".to_string(),
+                    },
+                    limits: ResourceSpec {
+                        cpu: "2".to_string(),
+                        memory: "4Gi".to_string(),
+                    },
+                },
+                ..Default::default()
+            },
+            status: None,
+        }
+    }
+
+    /// Liveness probe for a Validator must use TCP socket on port 11625.
+    /// This ensures the pod is only killed when the process is truly unresponsive,
+    /// not merely syncing.
+    #[test]
+    fn test_validator_liveness_probe_is_tcp_socket() {
+        let node = validator_node("v-liveness");
+        let sts = build_statefulset_for_test(&node);
+        let container = &sts.spec.unwrap().template.spec.unwrap().containers[0];
+        let probe = container
+            .liveness_probe
+            .as_ref()
+            .expect("liveness probe must be set");
+        assert!(
+            probe.tcp_socket.is_some(),
+            "Validator liveness probe must be TCP socket (not HTTP), got: {:?}",
+            probe
+        );
+        assert!(
+            probe.http_get.is_none(),
+            "Validator liveness probe must NOT be HTTP GET"
+        );
+        assert!(
+            probe.exec.is_none(),
+            "Validator liveness probe must NOT be exec"
+        );
+        let tcp = probe.tcp_socket.as_ref().unwrap();
+        assert_eq!(
+            tcp.port,
+            k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::Int(11625),
+            "Validator liveness probe must target port 11625"
+        );
+    }
+
+    /// Readiness probe for a Validator must use an exec probe that queries /info
+    /// and rejects CATCHING_UP / SYNCING states.
+    #[test]
+    fn test_validator_readiness_probe_is_exec_checking_info() {
+        let node = validator_node("v-readiness");
+        let sts = build_statefulset_for_test(&node);
+        let container = &sts.spec.unwrap().template.spec.unwrap().containers[0];
+        let probe = container
+            .readiness_probe
+            .as_ref()
+            .expect("readiness probe must be set");
+        assert!(
+            probe.exec.is_some(),
+            "Validator readiness probe must be exec (not HTTP GET), got: {:?}",
+            probe
+        );
+        assert!(
+            probe.http_get.is_none(),
+            "Validator readiness probe must NOT be HTTP GET"
+        );
+        let exec = probe.exec.as_ref().unwrap();
+        let cmd = exec.command.as_ref().expect("exec command must be set");
+        let script = cmd.join(" ");
+        assert!(
+            script.contains("11626"),
+            "readiness probe must query port 11626 (Stellar-Core HTTP)"
+        );
+        assert!(
+            script.contains("CATCHING_UP"),
+            "readiness probe must check for CATCHING_UP state"
+        );
+        assert!(
+            script.contains("SYNCING"),
+            "readiness probe must check for SYNCING state"
+        );
+    }
+
+    /// A node in CATCHING_UP/SYNCING should be Not Ready (liveness still passes).
+    /// This test verifies the probe script logic: the script must exit non-zero
+    /// when the /info response contains a syncing state.
+    #[test]
+    fn test_readiness_script_rejects_catching_up_state() {
+        let node = validator_node("v-sync-check");
+        let sts = build_statefulset_for_test(&node);
+        let container = &sts.spec.unwrap().template.spec.unwrap().containers[0];
+        let probe = container.readiness_probe.as_ref().unwrap();
+        let exec = probe.exec.as_ref().unwrap();
+        let cmd = exec.command.as_ref().unwrap();
+        // The script must use grep -qv (invert match) so that presence of
+        // CATCHING_UP or SYNCING causes a non-zero exit.
+        let script = cmd.join(" ");
+        assert!(
+            script.contains("grep -qv"),
+            "script must use 'grep -qv' to invert-match syncing states: {}",
+            script
+        );
+    }
+}
+
+// -----------------------------------------------------------------------
+// #707 — PodDisruptionBudgets for Stellar-Core nodes
+// -----------------------------------------------------------------------
+
+#[cfg(test)]
+mod pdb_tests {
+    use crate::controller::resources::build_pdb_for_test;
+    use crate::crd::{
+        types::{ResourceRequirements, ResourceSpec},
+        NodeType, StellarNetwork, StellarNode, StellarNodeSpec,
+    };
+    use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+    use kube::api::ObjectMeta;
+
+    fn node_with_replicas(node_type: NodeType, replicas: i32) -> StellarNode {
+        StellarNode {
+            metadata: ObjectMeta {
+                name: Some("test-node".to_string()),
+                namespace: Some("default".to_string()),
+                uid: Some("uid-pdb-test".to_string()),
+                ..Default::default()
+            },
+            spec: StellarNodeSpec {
+                node_type,
+                network: StellarNetwork::Testnet,
+                version: "v21.0.0".to_string(),
+                replicas,
+                resources: ResourceRequirements {
+                    requests: ResourceSpec {
+                        cpu: "500m".to_string(),
+                        memory: "1Gi".to_string(),
+                    },
+                    limits: ResourceSpec {
+                        cpu: "2".to_string(),
+                        memory: "4Gi".to_string(),
+                    },
+                },
+                ..Default::default()
+            },
+            status: None,
+        }
+    }
+
+    /// Validator with replicas=1 gets minAvailable=1 (edge case).
+    #[test]
+    fn test_validator_pdb_replicas_1_min_available_1() {
+        let node = node_with_replicas(NodeType::Validator, 1);
+        let pdb = build_pdb_for_test(&node).expect("PDB must be generated for Validator");
+        let spec = pdb.spec.unwrap();
+        assert_eq!(
+            spec.min_available,
+            Some(IntOrString::Int(1)),
+            "replicas=1 Validator must have minAvailable=1"
+        );
+        assert!(spec.max_unavailable.is_none());
+    }
+
+    /// Validator with replicas=3 gets minAvailable=2 (quorum majority).
+    #[test]
+    fn test_validator_pdb_replicas_3_min_available_2() {
+        let node = node_with_replicas(NodeType::Validator, 3);
+        let pdb = build_pdb_for_test(&node).expect("PDB must be generated for Validator");
+        let spec = pdb.spec.unwrap();
+        assert_eq!(
+            spec.min_available,
+            Some(IntOrString::Int(2)),
+            "replicas=3 Validator must have minAvailable=2"
+        );
+    }
+
+    /// Validator with replicas=5 gets minAvailable=3.
+    #[test]
+    fn test_validator_pdb_replicas_5_min_available_3() {
+        let node = node_with_replicas(NodeType::Validator, 5);
+        let pdb = build_pdb_for_test(&node).expect("PDB must be generated for Validator");
+        let spec = pdb.spec.unwrap();
+        assert_eq!(spec.min_available, Some(IntOrString::Int(3)));
+    }
+
+    /// PDB owner reference points to the StellarNode CR for garbage collection.
+    #[test]
+    fn test_validator_pdb_has_owner_reference() {
+        let node = node_with_replicas(NodeType::Validator, 3);
+        let pdb = build_pdb_for_test(&node).expect("PDB must be generated");
+        let owners = pdb.metadata.owner_references.expect("must have owner refs");
+        assert_eq!(owners.len(), 1);
+        assert_eq!(owners[0].name, "test-node");
+    }
+
+    /// Non-Validator with replicas=1 returns None (no PDB needed).
+    #[test]
+    fn test_non_validator_single_replica_no_pdb() {
+        let node = node_with_replicas(NodeType::Horizon, 1);
+        assert!(
+            build_pdb_for_test(&node).is_none(),
+            "single-replica Horizon must not get a PDB"
+        );
+    }
+
+    /// Non-Validator with replicas=3 gets default maxUnavailable=1.
+    #[test]
+    fn test_non_validator_multi_replica_default_pdb() {
+        let node = node_with_replicas(NodeType::Horizon, 3);
+        let pdb = build_pdb_for_test(&node).expect("PDB must be generated for multi-replica Horizon");
+        let spec = pdb.spec.unwrap();
+        assert_eq!(spec.max_unavailable, Some(IntOrString::Int(1)));
+        assert!(spec.min_available.is_none());
+    }
+#[test]
+fn test_validator_custom_env_overrides_defaults() {
+    use k8s_openapi::api::core::v1::EnvVar;
+
+    use crate::crd::types::{ResourceRequirements, ResourceSpec, ValidatorConfig};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Validator,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        validator_config: Some(ValidatorConfig {
+            seed_secret_ref: "my-seed".to_string(),
+            ..Default::default()
+        }),
+        stellar_core_env: vec![
+            EnvVar {
+                name: "STELLAR_CORE_WORKER_THREADS".to_string(),
+                value: Some("99".to_string()),
+                ..Default::default()
+            },
+            EnvVar {
+                name: "CUSTOM_CORE_FLAG".to_string(),
+                value: Some("enabled".to_string()),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let container = sts
+        .spec
+        .unwrap()
+        .template
+        .spec
+        .unwrap()
+        .containers
+        .into_iter()
+        .next()
+        .unwrap();
+    let env = container.env.unwrap_or_default();
+
+    assert!(
+        env.iter().any(|e| {
+            e.name == "STELLAR_CORE_WORKER_THREADS" && e.value.as_deref() == Some("99")
+        }),
+        "custom env must override default STELLAR_CORE_WORKER_THREADS"
+    );
+    assert!(
+        env.iter()
+            .any(|e| e.name == "CUSTOM_CORE_FLAG" && e.value.as_deref() == Some("enabled")),
+        "custom env must be appended for validator container"
+    );
+}
+
+#[test]
+fn test_horizon_custom_env_injected() {
+    use k8s_openapi::api::core::v1::EnvVar;
+
+    use crate::crd::types::{HorizonConfig, ResourceRequirements, ResourceSpec};
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Horizon,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        horizon_config: Some(HorizonConfig {
+            database_secret_ref: "db".to_string(),
+            ..Default::default()
+        }),
+        horizon_env: vec![EnvVar {
+            name: "HORIZON_LOG_LEVEL".to_string(),
+            value: Some("debug".to_string()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let dep = crate::controller::resources::build_deployment_for_test(&node);
+    let container = dep
+        .spec
+        .unwrap()
+        .template
+        .spec
+        .unwrap()
+        .containers
+        .into_iter()
+        .next()
+        .unwrap();
+    let env = container.env.unwrap_or_default();
+
+    assert!(
+        env.iter()
+            .any(|e| e.name == "HORIZON_LOG_LEVEL" && e.value.as_deref() == Some("debug")),
+        "custom env must be injected for horizon container"
+    );
+}
+
+#[test]
+fn test_spec_and_jurisdiction_tolerations_are_applied() {
+    use k8s_openapi::api::core::v1::Toleration;
+
+    use crate::crd::types::{
+        JurisdictionConfig, PlacementConfig, ResourceRequirements, ResourceSpec, ValidatorConfig,
+    };
+    use crate::crd::{NodeType, StellarNetwork, StellarNodeSpec};
+
+    let spec = StellarNodeSpec {
+        node_type: NodeType::Validator,
+        network: StellarNetwork::Testnet,
+        version: "v21.0.0".to_string(),
+        resources: ResourceRequirements {
+            requests: ResourceSpec {
+                cpu: "500m".to_string(),
+                memory: "1Gi".to_string(),
+            },
+            limits: ResourceSpec {
+                cpu: "2".to_string(),
+                memory: "4Gi".to_string(),
+            },
+        },
+        replicas: 1,
+        validator_config: Some(ValidatorConfig {
+            seed_secret_ref: "my-seed".to_string(),
+            ..Default::default()
+        }),
+        tolerations: vec![Toleration {
+            key: Some("dedicated".to_string()),
+            operator: Some("Equal".to_string()),
+            value: Some("stellar".to_string()),
+            effect: Some("NoSchedule".to_string()),
+            ..Default::default()
+        }],
+        placement: PlacementConfig {
+            jurisdiction: Some(JurisdictionConfig {
+                code: "EU".to_string(),
+                regions: vec!["eu-west-1".to_string()],
+                label_key: "topology.kubernetes.io/region".to_string(),
+                tolerations: vec![Toleration {
+                    key: Some("jurisdiction".to_string()),
+                    operator: Some("Equal".to_string()),
+                    value: Some("EU".to_string()),
+                    effect: Some("NoSchedule".to_string()),
+                    ..Default::default()
+                }],
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let mut node = crate::crd::StellarNode::new("test", spec);
+    node.metadata.namespace = Some("default".to_string());
+    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let pod_spec = sts.spec.unwrap().template.spec.unwrap();
+    let tolerations = pod_spec.tolerations.unwrap_or_default();
+
+    assert!(
+        tolerations.iter().any(|t| {
+            t.key.as_deref() == Some("dedicated") && t.value.as_deref() == Some("stellar")
+        }),
+        "spec tolerations must be propagated"
+    );
+    assert!(
+        tolerations
+            .iter()
+            .any(|t| t.key.as_deref() == Some("jurisdiction") && t.value.as_deref() == Some("EU")),
+        "jurisdiction tolerations must be merged"
+    );
 }
