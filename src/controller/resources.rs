@@ -411,6 +411,103 @@ pub async fn ensure_pvc(
     Ok(())
 }
 
+// ============================================================================
+// PodDisruptionBudget
+// ============================================================================
+
+/// Ensure a PodDisruptionBudget exists for the node
+#[instrument(skip(client, node), fields(name = %node.name_any(), namespace = node.namespace()))]
+pub async fn ensure_pdb(client: &Client, node: &StellarNode, dry_run: bool) -> Result<()> {
+    // PDBs are primarily for core nodes (Validators) to maintain quorum.
+    // However, we can also support them for other node types if requested.
+    if node.spec.node_type != NodeType::Validator
+        && node.spec.min_available.is_none()
+        && node.spec.max_unavailable.is_none()
+    {
+        return Ok(());
+    }
+
+    let namespace = node.namespace().unwrap_or_else(|| "default".to_string());
+    let api: Api<PodDisruptionBudget> = Api::namespaced(client.clone(), &namespace);
+    let name = node.name_any();
+
+    let pdb = build_pdb(node);
+
+    match api.get(&name).await {
+        Ok(existing) => {
+            if pdb_needs_update(&existing, &pdb) {
+                info!("Updating PDB {}", name);
+                api.patch(&name, &patch_params(dry_run), &Patch::Apply(&pdb))
+                    .await?;
+            } else {
+                info!("PDB {} already exists and is up-to-date", name);
+            }
+        }
+        Err(kube::Error::Api(e)) if e.code == 404 => {
+            info!("Creating PDB {}", name);
+            api.create(&post_params(dry_run), &pdb).await?;
+        }
+        Err(e) => return Err(Error::KubeError(e)),
+    }
+
+    Ok(())
+}
+
+fn pdb_needs_update(existing: &PodDisruptionBudget, desired: &PodDisruptionBudget) -> bool {
+    existing.spec != desired.spec
+        || existing.metadata.labels != desired.metadata.labels
+        || existing.metadata.annotations != desired.metadata.annotations
+}
+
+fn build_pdb(node: &StellarNode) -> PodDisruptionBudget {
+    let labels = standard_labels(node);
+    let name = node.name_any();
+
+    // Calculate min_available to maintain quorum for Validators if not explicitly provided
+    let min_available = if let Some(min_avail) = &node.spec.min_available {
+        Some(min_avail.clone())
+    } else if node.spec.max_unavailable.is_some() {
+        None // Use max_unavailable instead
+    } else if node.spec.node_type == NodeType::Validator {
+        // For Stellar Validators, maintain quorum.
+        // Formula: ceil(2N / 3) to ensure 2/3 majority.
+        let replicas = node.spec.replicas;
+        let quorum_min = (2.0 * replicas as f64 / 3.0).ceil() as i32;
+        Some(IntOrString::Int(quorum_min.max(1)))
+    } else {
+        None
+    };
+
+    let max_unavailable = if min_available.is_none() {
+        node.spec.max_unavailable.clone()
+    } else {
+        None
+    };
+
+    PodDisruptionBudget {
+        metadata: merge_resource_meta(
+            ObjectMeta {
+                name: Some(name),
+                namespace: node.namespace(),
+                labels: Some(labels),
+                owner_references: Some(vec![owner_reference(node)]),
+                ..Default::default()
+            },
+            &node.spec.resource_meta,
+        ),
+        spec: Some(PodDisruptionBudgetSpec {
+            min_available,
+            max_unavailable,
+            selector: Some(LabelSelector {
+                match_labels: Some(standard_labels(node)),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        status: None,
+    }
+}
+
 fn resolve_pvc_storage_class(
     node: &StellarNode,
     has_local_path: bool,

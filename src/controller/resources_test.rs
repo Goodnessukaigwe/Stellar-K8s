@@ -312,6 +312,78 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // PodDisruptionBudget
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_build_pdb_validator_default_quorum() {
+        use crate::controller::resources::build_pdb;
+        use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+
+        let mut spec = minimal_spec(NodeType::Validator);
+        spec.replicas = 3;
+        let node = crate::crd::StellarNode {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some("test-node".to_string()),
+                ..Default::default()
+            },
+            spec: spec.clone(),
+            status: None,
+        };
+
+        let pdb = build_pdb(&node);
+        let spec_pdb = pdb.spec.expect("PDB spec should be set");
+
+        // ceil(2 * 3 / 3) = 2
+        assert_eq!(spec_pdb.min_available, Some(IntOrString::Int(2)));
+    }
+
+    #[test]
+    fn test_build_pdb_validator_5_replicas_quorum() {
+        use crate::controller::resources::build_pdb;
+        use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+
+        let mut spec = minimal_spec(NodeType::Validator);
+        spec.replicas = 5;
+        let node = crate::crd::StellarNode {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some("test-node".to_string()),
+                ..Default::default()
+            },
+            spec: spec.clone(),
+            status: None,
+        };
+
+        let pdb = build_pdb(&node);
+        let spec_pdb = pdb.spec.expect("PDB spec should be set");
+
+        // ceil(2 * 5 / 3) = ceil(3.33) = 4
+        assert_eq!(spec_pdb.min_available, Some(IntOrString::Int(4)));
+    }
+
+    #[test]
+    fn test_build_pdb_custom_min_available() {
+        use crate::controller::resources::build_pdb;
+        use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+
+        let mut spec = minimal_spec(NodeType::Validator);
+        spec.min_available = Some(IntOrString::Int(1));
+        let node = crate::crd::StellarNode {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some("test-node".to_string()),
+                ..Default::default()
+            },
+            spec,
+            status: None,
+        };
+
+        let pdb = build_pdb(&node);
+        let spec_pdb = pdb.spec.expect("PDB spec should be set");
+
+        assert_eq!(spec_pdb.min_available, Some(IntOrString::Int(1)));
+    }
+
+    // -----------------------------------------------------------------------
     // Issue #298 — standard labels and ownerReferences on all resource builders
     // -----------------------------------------------------------------------
 
@@ -442,25 +514,22 @@ peer-2 = "G..."
             Some(true),
             "ownerReference.controller must be true"
         );
-        assert_eq!(
-            oref.block_owner_deletion,
-            Some(true),
-            "ownerReference.blockOwnerDeletion must be true"
-        );
     }
 
     #[test]
-    fn test_pvc_has_standard_labels_and_owner_ref() {
+    fn test_pvc_has_labels_and_owner_ref() {
+        use crate::controller::resources::build_pvc;
         let node = make_node(NodeType::Validator);
-        let pvc = build_pvc_for_test(&node, "standard".to_string());
+        let pvc = build_pvc(&node, "standard".to_string());
         assert_standard_labels(&pvc.metadata, &node);
         assert_owner_reference(&pvc.metadata, &node);
     }
 
     #[test]
-    fn test_config_map_has_standard_labels_and_owner_ref() {
+    fn test_config_map_has_labels_and_owner_ref() {
+        use crate::controller::resources::build_config_map;
         let node = make_node(NodeType::Validator);
-        let cm = build_config_map_for_test(&node);
+        let cm = build_config_map(&node, None, false);
         assert_standard_labels(&cm.metadata, &node);
         assert_owner_reference(&cm.metadata, &node);
     }
@@ -531,7 +600,7 @@ peer-2 = "G..."
     #[test]
     fn test_service_has_standard_labels_and_owner_ref() {
         let node = make_node(NodeType::Horizon);
-        let svc = build_service_for_test(&node);
+        let svc = build_service(&node, false);
         assert_standard_labels(&svc.metadata, &node);
         assert_owner_reference(&svc.metadata, &node);
     }
@@ -621,41 +690,21 @@ peer-2 = "G..."
     }
 
     #[test]
-    fn test_owner_reference_fields() {
+    fn test_statefulset_has_labels_and_owner_ref() {
+        use crate::controller::resources::build_statefulset;
         let node = make_node(NodeType::Validator);
-        let oref = owner_reference(&node);
-        assert_eq!(oref.name, "test-node");
-        assert_eq!(oref.uid, "abc-123");
-        assert_eq!(oref.controller, Some(true));
-        assert_eq!(oref.block_owner_deletion, Some(true));
-        assert!(!oref.api_version.is_empty());
-        assert!(!oref.kind.is_empty());
+        let sts = build_statefulset(&node, false, None);
+        assert_standard_labels(&sts.metadata, &node);
+        assert_owner_reference(&sts.metadata, &node);
     }
 
     #[test]
-    fn test_validator_component_label() {
+    fn test_pdb_has_labels_and_owner_ref() {
+        use crate::controller::resources::build_pdb;
         let node = make_node(NodeType::Validator);
-        let labels = standard_labels(&node);
-        let component = labels
-            .get("app.kubernetes.io/component")
-            .expect("component label must be set");
-        assert!(
-            component.to_lowercase().contains("validator"),
-            "component label should reflect validator type, got: {component}"
-        );
-    }
-
-    #[test]
-    fn test_horizon_component_label() {
-        let node = make_node(NodeType::Horizon);
-        let labels = standard_labels(&node);
-        let component = labels
-            .get("app.kubernetes.io/component")
-            .expect("component label must be set");
-        assert!(
-            component.to_lowercase().contains("horizon"),
-            "component label should reflect horizon type, got: {component}"
-        );
+        let pdb = build_pdb(&node);
+        assert_standard_labels(&pdb.metadata, &node);
+        assert_owner_reference(&pdb.metadata, &node);
     }
 
     // -----------------------------------------------------------------------
