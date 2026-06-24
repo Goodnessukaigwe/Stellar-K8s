@@ -12,8 +12,8 @@ REPO="${REPO:-$_DEFAULT_REPO}"
 
 # Validate owner/name format (no slashes in either part, exactly one slash).
 if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-  echo "ERROR: REPO='$REPO' is not a valid 'owner/name' format." >&2
-  echo "       Set REPO=owner/name or unset it to use the default ($_DEFAULT_REPO)." >&2
+  echo "ERROR [validate repo]: REPO='$REPO' is not a valid 'owner/name' format." >&2
+  echo "  Hint: Set REPO=owner/name or unset it to use the default ($_DEFAULT_REPO)." >&2
   exit 1
 fi
 
