@@ -1,4 +1,17 @@
-.PHONY: help build test fmt fmt-check lint clean docker-build install-crd apply-samples dev-setup ci-local benchmark benchmark-upgrade benchmark-webhook benchmark-webhook-health benchmark-webhook-compare benchmark-webhook-save benchmark-all run-dev helm-lint crd-gen run-local compose-up compose-dev compose-down compose-logs quickstart validate preflight
+.PHONY: help \
+	fmt fmt-check lint audit \
+	build test ci-local quick watch \
+	docker-build docker-build-ci docker-multiarch \
+	dev-setup pre-commit pre-commit-install run-local run-dev \
+	install-crd apply-samples crd-gen completions \
+	helm-lint \
+	generate-api-docs check-api-docs \
+	benchmark benchmark-upgrade benchmark-webhook benchmark-webhook-health \
+	benchmark-webhook-compare benchmark-webhook-save benchmark-all \
+	compose-up compose-dev compose-down compose-logs \
+	bundle bundle-build \
+	quickstart validate preflight all \
+	clean
 
 # Default target
 .DEFAULT_GOAL := help
@@ -19,7 +32,12 @@ DEFAULT_CHANNEL ?= "alpha"
 help: ## Show this help
 	@echo 'Usage: make [target]'
 	@echo ''
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo 'Clone-to-validation workflow:'
+	@echo '  1. make dev-setup      — install toolchain + hooks'
+	@echo '  2. make ci-local       — fmt-check + lint + audit + test + build'
+	@echo '  3. make quickstart     — spin up a local kind cluster end-to-end'
+	@echo ''
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 fmt: ## Format code
 	$(CARGO) fmt --all
@@ -30,7 +48,8 @@ fmt-check: ## Check formatting
 
 lint: ## Run clippy
 	@echo "→ Running clippy..."
-	@K8S_OPENAPI_ENABLED_VERSION=1.30 $(CARGO) clippy --workspace --all-targets --all-features -- \
+	@K8S_OPENAPI_ENABLED_VERSION=1.30 $(CARGO) clippy --workspace --all-targets \
+		--features "rest-api,metrics,admission-webhook,k8s-v1-30,reconciler-fuzz" -- \
 		-D clippy::correctness \
 		-D clippy::suspicious \
 		-D clippy::perf \
@@ -181,8 +200,8 @@ run-local: build ## Run locally
 run-dev: ## Run operator in dev mode with hot reload
 	RUST_LOG=debug cargo watch -x run
 
+
 # Bundle targets
-.PHONY: bundle bundle-build
 bundle: ## Generate bundle manifests and metadata, then validate generated files.
 	@echo "→ Generating manifests from Helm chart..."
 	@mkdir -p rendered

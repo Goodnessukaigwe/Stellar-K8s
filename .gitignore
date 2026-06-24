@@ -65,3 +65,11 @@ rendered-output.yaml
 # Temporary Test Files
 test_*.rs
 starfield.html
+skills-lock.json
+
+# Benchmark results — regenerate with: make benchmark-webhook-save
+results/
+
+# Helm rendered manifests — regenerate with: helm template stellar-operator charts/stellar-operator
+rendered/
+rendered-manifests.yaml
