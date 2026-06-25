@@ -172,6 +172,19 @@ jobs:
         if: needs.changes.outputs.rust_core == 'true'
         run: make lint
 
+  # ── 3.5. Link Check ──────────────────────────────────────────────────────────
+  link-check:
+    name: Markdown Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install markdown-link-check
+        run: npm install -g markdown-link-check
+        
+      - name: Run link check
+        run: find . -name "*.md" -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/target/*" -exec markdown-link-check -q {} +
+
   # ── 4. Security audit (only when deps change) ────────────────────────────────
   security-audit:
     name: Security Audit
