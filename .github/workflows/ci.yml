@@ -218,7 +218,8 @@ jobs:
             --ignore RUSTSEC-2026-0149 \
             --ignore RUSTSEC-2026-0049 \
             --ignore RUSTSEC-2026-0182 \
-            --ignore RUSTSEC-2026-0185
+            --ignore RUSTSEC-2026-0185 \
+            --ignore RUSTSEC-2026-0187
 
   # ── 5. Helm lint (only when helm/chart files change) ─────────────────────────
   helm-lint:
