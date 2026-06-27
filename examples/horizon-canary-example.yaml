@@ -5,7 +5,7 @@ metadata:
   namespace: default
 spec:
   nodeType: Horizon
-  network: mainnet
+  network: Mainnet
 
   # Change this version to trigger a canary rollout!
   version: "2.33.0"

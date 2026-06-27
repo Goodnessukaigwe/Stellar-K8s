@@ -9,7 +9,7 @@ metadata:
   namespace: stellar
 spec:
   nodeType: Validator
-  network: mainnet
+  network: Mainnet
   version: "v21.0.0"
 
   # Required rollout availability and spreading constraints.

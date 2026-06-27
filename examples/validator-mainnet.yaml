@@ -12,7 +12,7 @@ spec:
   nodeType: Validator
 
   # The target Stellar network. 'Mainnet' uses the public network passphrase.
-  network: mainnet
+  network: Mainnet
 
   # The container version (image tag) to use for stellar-core.
   version: "v21.0.0"

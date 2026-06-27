@@ -20,7 +20,7 @@ metadata:
 spec:
   nodeType: Validator
   network: Testnet
-  version: "21.0.0"
+  version: "v21.0.0"
   historyMode: Recent
   storage:
     storageClass: standard-rwo
@@ -60,7 +60,7 @@ metadata:
 spec:
   nodeType: Validator
   network: Testnet
-  version: "21.0.0"
+  version: "v21.0.0"
   historyMode: Recent
   storage:
     storageClass: standard-rwo

@@ -2,6 +2,16 @@
 
 Several files in this repository are **generated** and must never be hand-edited. This guide documents how to regenerate Helm charts and OLM bundle manifests from their sources of truth.
 
+## Quick command
+
+To regenerate all derived artifacts in one step:
+
+```bash
+make regenerate
+```
+
+This runs `crd-gen`, `generate-api-docs`, and `bundle` in sequence. See the individual sections below for details on each step.
+
 ## Overview
 
 | Generated artifact | Source of truth | Command |

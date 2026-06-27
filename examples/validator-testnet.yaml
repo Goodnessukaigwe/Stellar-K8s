@@ -12,7 +12,7 @@ spec:
   nodeType: Validator
 
   # 'Testnet' uses the SDF Test Network passphrase and default archives.
-  network: testnet
+  network: Testnet
 
   version: "v21.0.0"
 

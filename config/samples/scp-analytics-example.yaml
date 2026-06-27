@@ -11,13 +11,13 @@ metadata:
   labels:
     app.kubernetes.io/name: stellar-validator
     app.kubernetes.io/component: validator
-    stellar.org/network: mainnet
+    stellar.org/network: Mainnet
     stellar.org/scp-analytics: enabled
 spec:
   # Node configuration
   nodeType: Validator
-  network: mainnet
-  version: "21.0.0"
+  network: Mainnet
+  version: "v21.0.0"
   historyMode: Full
   
   # SCP Analytics configuration
