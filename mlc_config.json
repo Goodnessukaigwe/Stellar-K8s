@@ -47,6 +47,9 @@
     },
     {
       "pattern": "^https://developers.stellar.org/"
+    },
+    {
+      "pattern": "^https://gdpr.eu/"
     }
   ]
 }
