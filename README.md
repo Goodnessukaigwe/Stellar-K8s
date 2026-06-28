@@ -609,22 +609,6 @@ make generate-api-docs
 
 For detailed instructions on setting up a local development environment, building the project, running tests, and managing Kubernetes resources locally, please refer to the **[Development Guide](DEVELOPMENT.md)**.
 
-### Quick Start Reference
-
-```bash
-# Setup development environment (includes pre-commit hooks)
-make dev-setup
-
-# Run quick checks (format & cargo check)
-make quick
-
-# Run all tests
-make test
-
-# Build release binaries
-make build
-```
-
 ### Reconciler fuzzing
 
 To ensure the operator never panics under malformed or extreme inputs, the reconciler is fuzzed with random `StellarNodeSpec` mutations and event sequences (proptest). Run the fuzzer locally:
