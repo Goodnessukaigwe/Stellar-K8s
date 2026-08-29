@@ -1,0 +1,86 @@
+# Production-oriented Soroban RPC deployment on Testnet.
+# Fields are limited to the published stellarnodes.stellar.org/v1alpha1 OpenAPI schema.
+# kubectl apply --dry-run=client -f config/crd/stellarnode-crd.yaml
+# kubectl apply --dry-run=client -f docs/reference/examples/soroban-rpc.yaml
+
+apiVersion: stellar.org/v1alpha1
+kind: StellarNode
+metadata:
+  name: soroban-rpc-testnet
+  namespace: stellar
+  labels:
+    app.kubernetes.io/name: stellar-node
+    app.kubernetes.io/component: soroban-rpc
+    app.kubernetes.io/part-of: stellar
+spec:
+  # SorobanRpc exposes JSON-RPC for simulation and transaction submission.
+  nodeType: SorobanRpc
+
+  network: testnet
+
+  version: "21.1.0"
+
+  replicas: 2
+
+  minAvailable: 1
+  maxUnavailable: 1
+
+  topologySpreadConstraints: []
+
+  historyMode: Recent
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  storage:
+    mode: PersistentVolume
+    storageClass: "ssd-premium"
+    size: "200Gi"
+    retentionPolicy: Retain
+
+  # Semantically required when nodeType is SorobanRpc.
+  # OpenAPI requires stellarCoreUrl when this object is set.
+  sorobanConfig:
+    stellarCoreUrl: "http://validator-testnet:11626"
+    enablePreflight: true
+    maxEventsPerRequest: 10000
+    # Prefer structured captive-core config over deprecated captiveCoreConfig string.
+    captiveCoreStructuredConfig:
+      logLevel: "info"
+      historyArchiveUrls:
+        - "https://history.stellar.org/prd/core-testnet/core_testnet_001"
+    # Bounded fail-open cache for read-only state methods (schema defaults shown).
+    cache:
+      enabled: true
+      ttlSecs: 30
+      maxEntries: 10000
+      maxBytes: 67108864
+
+  # HPA is semantically supported for SorobanRpc. Gas autoscaling is not in the
+  # published OpenAPI schema and is omitted.
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCpuUtilizationPercentage: 70
+
+  ingress:
+    className: "nginx"
+    hosts:
+      - host: "soroban-rpc.example.com"
+        paths:
+          - path: "/"
+            pathType: Prefix
+    tlsSecretName: "soroban-rpc-tls-secret"
+
+  strategy:
+    type: rollingUpdate
+
+  podAntiAffinity: Soft
+  alerting: true
+  suspended: false
+  maintenanceMode: false
