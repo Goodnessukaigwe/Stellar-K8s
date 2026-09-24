@@ -83,6 +83,7 @@ pub mod predictive_scaling;
 pub mod pss;
 pub mod quota;
 pub mod registry_controller;
+pub mod registry_gate;
 pub mod resource_meta;
 pub mod retry_policy_tuner;
 pub mod snapshot_integrity;
@@ -130,6 +131,7 @@ pub mod mtls;
 pub mod mtls_rotation;
 pub mod oci_snapshot;
 pub mod operator_config;
+pub mod ownership_registry;
 pub mod peer_discovery;
 #[cfg(test)]
 mod peer_discovery_test;

@@ -70,11 +70,24 @@ jobs:
           fetch-depth: 0   # full history needed for commit analysis
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Semver gate (#1523): breaking CRD API changes since the last chart
+      # release force a major bump mechanically, regardless of commit messages.
+      - name: Compute CRD-required bump
+        id: crd_impact
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          echo "required=$(python3 scripts/semver_gate.py required-bump)" >> "$GITHUB_OUTPUT"
+
       - name: Detect version bump from conventional commits
         id: detect
         env:
           BUMP_OVERRIDE: ${{ github.event.inputs.bump_override }}
+          CRD_REQUIRED_BUMP: ${{ steps.crd_impact.outputs.required }}
         run: |
+          if [ -z "$BUMP_OVERRIDE" ] && [ "$CRD_REQUIRED_BUMP" = "major" ]; then
+            echo "Breaking CRD change detected; forcing a major bump."
+            BUMP_OVERRIDE=major
+          fi
           bash scripts/bump-chart-version.sh \
             --chart-path "${{ env.CHART_PATH }}" \
             --output-env \
@@ -134,6 +147,13 @@ jobs:
 
           echo "Updated Chart.yaml:"
           grep -E "^(version|appVersion):" "${{ env.CHART_PATH }}/Chart.yaml"
+
+      - name: Semver gate — block non-conforming release
+        env:
+          NEW_VERSION: ${{ needs.version-bump.outputs.new_version }}
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          python3 scripts/semver_gate.py check --version "${NEW_VERSION}"
 
       - name: Append changelog entry
         env:

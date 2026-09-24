@@ -284,6 +284,9 @@ jobs:
       - name: Run shell safety gate unit tests
         run: python3 -m unittest scripts.tests.test_check_shell_safety
 
+      - name: Run semver gate unit tests
+        run: python3 -m unittest scripts.tests.test_semver_gate
+
       - name: Check formatting
         if: needs.changes.outputs.rust_core == 'true'
         run: make fmt-check
