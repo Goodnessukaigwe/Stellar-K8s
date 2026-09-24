@@ -267,6 +267,12 @@ path = "src/bin/conventional-commit-check.rs"
 name = "backup-verify"
 path = "src/bin/backup-verify.rs"
 
+# Lifecycle hooks runner — installed into workload pods to run ordered
+# setup / readiness / teardown hooks (#1525).
+[[bin]]
+name = "stellar-hooks"
+path = "src/bin/stellar-hooks.rs"
+
 # Cross-platform developer bootstrap verifier — pure Rust so it also runs on
 # plain Windows (no WSL/Git Bash needed), unlike scripts/preflight.sh.
 [[bin]]
