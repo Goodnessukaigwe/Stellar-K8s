@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+## Chart v1.5.0 (2026-09-24) [minor]
+
+• Merge pull request #1534 from francisdouglas-ux/feat/epics-1521-1522-1523-1524
+✨ feat: add composite SLOs, semver gate, ownership registry and registr…
+✨ feat: add composite SLOs, semver gate, ownership registry and registry pull gate
+• - composite_slo: weighted composite SLI objective published via recording
+•   rules (ratio, burn rates, error budget), with versioned weight reviews
+•   enforced in tests (#1524)
+• - semver gate: CRD API diff forces a major bump, chart/appVersion/image/CRD
+•   versions must align; wired into the Helm release pipeline (#1523)
+• - ServiceOwnershipRegistry CRD and reconciler deriving owners from labels,
+•   deploy metadata and CODEOWNERS, with stale/unowned alerting, history and
+•   alert-routing attribution (#1522)
+• - registry pull gate: synchronous push scan, per-digest reports, and
+•   pull denial for unscanned/critical-CVE digests in enforce mode (#1521)
+• Closes #1521
+• Closes #1522
+• Closes #1523
+• Closes #1524
+• Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+
 ## Chart v1.4.0 (2026-09-24) [minor]
 
 • Merge pull request #1533 from godamongstmen897/feat/epics-1525-1526-1527-1528
