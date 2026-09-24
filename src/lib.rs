@@ -104,6 +104,7 @@ pub mod cli;
 pub mod commands;
 pub mod compliance;
 pub mod compliance_scan;
+pub mod composite_slo;
 pub mod config_mgmt;
 pub mod consensus_monitoring;
 pub mod controller;
