@@ -252,6 +252,7 @@ pub use snapshot_worker::run_snapshot_worker;
 pub use webhook_delivery::{
     DeliveryRecord, WebhookDeliveryService, WebhookEndpoint, WebhookEvent, WebhookEventType,
 };
+pub mod cross_signal_anomaly;
 pub mod health_check_sidecar;
 pub mod ml_pipeline;
 pub mod observability_dashboard;
