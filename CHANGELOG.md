@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+## Chart v1.4.0 (2026-09-24) [minor]
+
+• Merge pull request #1533 from godamongstmen897/feat/epics-1525-1526-1527-1528
+✨ feat: add lifecycle hooks, perf bisection, backup consistency groups …
+✨ feat: add lifecycle hooks, perf bisection, backup consistency groups and deprecation timeline
+• - backup: namespace-scoped consistency groups with dependency-ordered
+•   quiesce/snapshot/restore, app-native hooks with fs-freeze fallback,
+•   automatic post-restore verification and group-level RPO (#1527)
+• - api_gateway: deprecation timeline built from VersioningConfig with
+•   adoption derived from gateway request telemetry, interval reminders
+•   and JSON/CSV/HTML report export (#1528)
+• - benchmark_bisect: Mann-Whitney based regression detection and
+•   noise-aware bisection with effect size/confidence evidence (#1526)
+• - controller: declarative lifecycle hooks framework (setup/readiness/
+•   teardown) with ordering, block/warn semantics, idempotency and grace
+•   period enforcement, per-hook timing metrics, and the stellar-hooks
+•   runner binary (#1525)
+• Closes #1525
+• Closes #1526
+• Closes #1527
+• Closes #1528
+• Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+📝 chore(helm): bump chart to v1.3.7 [skip ci]
+🐛 fix(ci): fix failing badge workflows
+• - container-image-security: skip Trivy/Grype/SBOM scans when image
+•   wasn't pushed to GHCR (digest output empty)
+• - conventional-commit-check.rs: fix rustdoc errors (bare URL, unclosed
+•   HTML tags) that broke docs-deploy workflow
+
+
 ## Chart v1.3.7 (2026-09-03) [patch]
 
 🐛 fix(ci): fix failing badge workflows
