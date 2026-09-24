@@ -45,6 +45,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --bin stellar-operator \
     --bin kubectl-stellar \
     --bin stellar-sidecar \
+    --bin stellar-hooks \
     --bin stellar-watcher \
     --bin stellar-fork-detector \
     --bin stellar-health-sidecar && \
@@ -52,12 +53,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
   cp /app/target/release/stellar-operator /app/bin/ && \
   cp /app/target/release/kubectl-stellar /app/bin/ && \
   cp /app/target/release/stellar-sidecar /app/bin/ && \
+  cp /app/target/release/stellar-hooks /app/bin/ && \
   cp /app/target/release/stellar-watcher /app/bin/ && \
   cp /app/target/release/stellar-fork-detector /app/bin/ && \
   cp /app/target/release/stellar-health-sidecar /app/bin/ && \
   strip /app/bin/stellar-operator \
     /app/bin/kubectl-stellar \
     /app/bin/stellar-sidecar \
+    /app/bin/stellar-hooks \
     /app/bin/stellar-watcher \
     /app/bin/stellar-fork-detector \
     /app/bin/stellar-health-sidecar
@@ -132,6 +135,7 @@ FROM runtime-base AS runtime
 COPY --from=builder /app/bin/stellar-operator /stellar-operator
 COPY --from=builder /app/bin/kubectl-stellar /kubectl-stellar
 COPY --from=builder /app/bin/stellar-sidecar /stellar-sidecar
+COPY --from=builder /app/bin/stellar-hooks /stellar-hooks
 COPY --from=builder /app/bin/stellar-watcher /stellar-watcher
 COPY --from=builder /app/bin/stellar-fork-detector /stellar-fork-detector
 COPY --from=builder /app/bin/stellar-health-sidecar /stellar-health-sidecar

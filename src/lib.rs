@@ -94,6 +94,7 @@ static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 pub mod api_gateway;
 pub mod backup;
+pub mod benchmark_bisect;
 pub mod benchmark_compare;
 pub mod bootstrap_verify;
 pub mod byzantine;

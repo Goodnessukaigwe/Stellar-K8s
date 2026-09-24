@@ -123,6 +123,7 @@ pub(crate) mod health;
 #[cfg(test)]
 mod health_test;
 pub mod kms_secret;
+pub mod lifecycle_hooks;
 #[cfg(feature = "metrics")]
 pub mod metrics;
 pub mod mtls;
