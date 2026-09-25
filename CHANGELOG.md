@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+## Chart v2.0.0 (2026-09-25) [major]
+
+
+
+
 ## Chart v1.5.0 (2026-09-24) [minor]
 
 • Merge pull request #1534 from francisdouglas-ux/feat/epics-1521-1522-1523-1524
