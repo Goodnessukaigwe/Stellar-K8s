@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Guardrails for high-risk configuration combinations
 //!
 //! Detects combinations of `StellarNodeSpec` fields that are individually valid
@@ -282,7 +294,8 @@ mod tests {
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
         assert!(
-            v.iter().any(|e| e.code == "G01" && e.severity == Severity::Error),
+            v.iter()
+                .any(|e| e.code == "G01" && e.severity == Severity::Error),
             "expected G01 error, got: {v:?}"
         );
     }
@@ -309,7 +322,8 @@ mod tests {
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
         assert!(
-            v.iter().any(|e| e.code == "G02" && e.severity == Severity::Error),
+            v.iter()
+                .any(|e| e.code == "G02" && e.severity == Severity::Error),
             "expected G02 error, got: {v:?}"
         );
     }
@@ -336,7 +350,8 @@ mod tests {
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
         assert!(
-            v.iter().any(|e| e.code == "G03" && e.severity == Severity::Warning),
+            v.iter()
+                .any(|e| e.code == "G03" && e.severity == Severity::Warning),
             "expected G03 warning, got: {v:?}"
         );
     }
@@ -359,7 +374,8 @@ mod tests {
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
         assert!(
-            v.iter().any(|e| e.code == "G04" && e.severity == Severity::Warning),
+            v.iter()
+                .any(|e| e.code == "G04" && e.severity == Severity::Warning),
             "expected G04 warning, got: {v:?}"
         );
     }
@@ -382,7 +398,8 @@ mod tests {
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
         assert!(
-            v.iter().any(|e| e.code == "G05" && e.severity == Severity::Error),
+            v.iter()
+                .any(|e| e.code == "G05" && e.severity == Severity::Error),
             "expected G05 error, got: {v:?}"
         );
     }
@@ -414,7 +431,8 @@ mod tests {
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
         assert!(
-            v.iter().any(|e| e.code == "G06" && e.severity == Severity::Warning),
+            v.iter()
+                .any(|e| e.code == "G06" && e.severity == Severity::Warning),
             "expected G06 warning, got: {v:?}"
         );
     }
@@ -431,24 +449,19 @@ mod tests {
 
     #[test]
     fn g08_custom_network_no_passphrase_is_error() {
-        let spec = base_spec(
-            NodeType::Validator,
-            StellarNetwork::Custom("my-net".into()),
-        );
+        let spec = base_spec(NodeType::Validator, StellarNetwork::Custom("my-net".into()));
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
         assert!(
-            v.iter().any(|e| e.code == "G08" && e.severity == Severity::Error),
+            v.iter()
+                .any(|e| e.code == "G08" && e.severity == Severity::Error),
             "expected G08 error, got: {v:?}"
         );
     }
 
     #[test]
     fn g08_custom_network_with_inline_passphrase_is_clean() {
-        let mut spec = base_spec(
-            NodeType::Validator,
-            StellarNetwork::Custom("my-net".into()),
-        );
+        let mut spec = base_spec(NodeType::Validator, StellarNetwork::Custom("my-net".into()));
         spec.custom_network_passphrase = Some("My Network Passphrase ; 2024".into());
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
@@ -457,10 +470,7 @@ mod tests {
 
     #[test]
     fn g08_custom_network_with_secret_ref_is_clean() {
-        let mut spec = base_spec(
-            NodeType::Validator,
-            StellarNetwork::Custom("my-net".into()),
-        );
+        let mut spec = base_spec(NodeType::Validator, StellarNetwork::Custom("my-net".into()));
         spec.passphrase_secret_ref = Some("passphrase-secret".into());
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
@@ -473,7 +483,7 @@ mod tests {
     fn blocking_violations_filters_errors_only() {
         let mut spec = base_spec(NodeType::Validator, StellarNetwork::Mainnet);
         spec.replicas = 1; // G05 Error
-        // G06 Warning (no DR) and G07 Warning (no network policy) are also present
+                           // G06 Warning (no DR) and G07 Warning (no network policy) are also present
         let node = make_node(spec);
         let all = check_config_guardrails(&node);
         let blocking = blocking_violations(&all);
@@ -488,6 +498,9 @@ mod tests {
         let spec = base_spec(NodeType::Validator, StellarNetwork::Testnet);
         let node = make_node(spec);
         let v = check_config_guardrails(&node);
-        assert!(v.is_empty(), "clean Testnet config should pass all guardrails, got: {v:?}");
+        assert!(
+            v.is_empty(),
+            "clean Testnet config should pass all guardrails, got: {v:?}"
+        );
     }
 }

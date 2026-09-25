@@ -19,32 +19,22 @@ tests:
             app.kubernetes.io/name: stellar-operator
             app.kubernetes.io/instance: RELEASE-NAME
 
-  - it: contains all six expected feature-flag keys
+  - it: contains only the live enable_dr feature-flag key
     asserts:
-      - isNotNull:
-          path: data.enable_cve_scanning
-      - isNotNull:
-          path: data.enable_read_pool
       - isNotNull:
           path: data.enable_dr
-      - isNotNull:
-          path: data.enable_peer_discovery
-      - isNotNull:
-          path: data.enable_archive_health
-      - isNotNull:
-          path: data.enable_soroban_metrics
-
-  - it: defaults enable_cve_scanning to true
-    asserts:
-      - equal:
+      - isNull:
           path: data.enable_cve_scanning
-          value: "true"
-
-  - it: defaults enable_read_pool to false
-    asserts:
-      - equal:
+      - isNull:
           path: data.enable_read_pool
-          value: "false"
+      - isNull:
+          path: data.enable_peer_discovery
+      - isNull:
+          path: data.enable_archive_health
+      - isNull:
+          path: data.enable_soroban_metrics
+      - isNull:
+          path: data.enable_scp_topology
 
   - it: defaults enable_dr to false
     asserts:
@@ -52,34 +42,12 @@ tests:
           path: data.enable_dr
           value: "false"
 
-  - it: defaults enable_peer_discovery to true
-    asserts:
-      - equal:
-          path: data.enable_peer_discovery
-          value: "true"
-
-  - it: defaults enable_archive_health to true
-    asserts:
-      - equal:
-          path: data.enable_archive_health
-          value: "true"
-
-  - it: defaults enable_soroban_metrics to true
-    asserts:
-      - equal:
-          path: data.enable_soroban_metrics
-          value: "true"
-
-  - it: accepts overridden feature flag values
+  - it: accepts overridden enable_dr value
     set:
-      featureFlags.enableCveScanning: "false"
-      featureFlags.enableReadPool: "true"
+      featureFlags.enableDr: "true"
     asserts:
       - equal:
-          path: data.enable_cve_scanning
-          value: "false"
-      - equal:
-          path: data.enable_read_pool
+          path: data.enable_dr
           value: "true"
 
   - it: renders in the release namespace

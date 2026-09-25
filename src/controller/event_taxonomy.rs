@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Structured event taxonomy for Stellar-K8s operator actions
 //!
 //! Provides a uniform vocabulary of `reason` and `action` strings emitted as
@@ -259,9 +271,9 @@ impl EventReason {
             | Self::MtlsCertRotated
             | Self::SecretRotated => EventCategory::Security,
 
-            Self::DiskExpanded
-            | Self::HpaTargetAdjusted
-            | Self::VpaRecommendationApplied => EventCategory::Scaling,
+            Self::DiskExpanded | Self::HpaTargetAdjusted | Self::VpaRecommendationApplied => {
+                EventCategory::Scaling
+            }
 
             Self::BackupCreated
             | Self::RestoreCompleted
@@ -269,9 +281,9 @@ impl EventReason {
             | Self::DrDrillPassed
             | Self::DrDrillFailed => EventCategory::DisasterRecovery,
 
-            Self::UpgradeInitiated
-            | Self::UpgradeSucceeded
-            | Self::UpgradeRolledBack => EventCategory::Upgrade,
+            Self::UpgradeInitiated | Self::UpgradeSucceeded | Self::UpgradeRolledBack => {
+                EventCategory::Upgrade
+            }
 
             Self::ConfigReloaded | Self::FeatureFlagChanged => EventCategory::Configuration,
 
@@ -387,7 +399,10 @@ mod tests {
             (EventReason::NodeCreated, "NodeCreated"),
             (EventReason::NodeDeleted, "NodeDeleted"),
             (EventReason::PodRestarted, "PodRestarted"),
-            (EventReason::DatabaseClearInitiated, "DatabaseClearInitiated"),
+            (
+                EventReason::DatabaseClearInitiated,
+                "DatabaseClearInitiated",
+            ),
             (EventReason::CvePatchApplied, "CvePatchApplied"),
             (EventReason::DiskExpanded, "DiskExpanded"),
             (EventReason::BackupCreated, "BackupCreated"),
@@ -447,11 +462,7 @@ mod tests {
             EventReason::UpgradeSucceeded,
         ];
         for r in normal_reasons {
-            assert_eq!(
-                r.event_type(),
-                EventType::Normal,
-                "{r:?} should be Normal"
-            );
+            assert_eq!(r.event_type(), EventType::Normal, "{r:?} should be Normal");
         }
     }
 
@@ -495,9 +506,21 @@ mod tests {
 
     #[test]
     fn descriptor_category_delegates_to_reason() {
-        assert_eq!(descriptors::POD_RESTARTED.category(), EventCategory::Remediation);
-        assert_eq!(descriptors::DISK_EXPANDED.category(), EventCategory::Scaling);
-        assert_eq!(descriptors::BACKUP_CREATED.category(), EventCategory::DisasterRecovery);
-        assert_eq!(descriptors::ADMISSION_REJECTED.category(), EventCategory::Audit);
+        assert_eq!(
+            descriptors::POD_RESTARTED.category(),
+            EventCategory::Remediation
+        );
+        assert_eq!(
+            descriptors::DISK_EXPANDED.category(),
+            EventCategory::Scaling
+        );
+        assert_eq!(
+            descriptors::BACKUP_CREATED.category(),
+            EventCategory::DisasterRecovery
+        );
+        assert_eq!(
+            descriptors::ADMISSION_REJECTED.category(),
+            EventCategory::Audit
+        );
     }
 }

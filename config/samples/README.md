@@ -17,8 +17,12 @@ This directory contains ready-to-apply sample manifests for testing and developm
 ## Quick Start
 
 ```bash
-# Install the CRD first
+# Install the StellarNode CRD (required)
 kubectl apply -f ../crd/stellarnode-crd.yaml
+
+# For benchmark samples, also install canonical benchmark CRDs:
+kubectl apply -f ../crd/stellarbenchmark-crd.yaml
+kubectl apply -f ../crd/stellarbenchmarkreport-crd.yaml
 
 # Apply the minimal sample
 kubectl apply -f minimal-validator.yaml

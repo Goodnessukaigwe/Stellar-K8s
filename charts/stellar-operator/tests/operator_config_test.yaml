@@ -9,7 +9,7 @@ tests:
           of: ConfigMap
       - equal:
           path: metadata.name
-          value: RELEASE-NAME-stellar-operator-config
+          value: RELEASE-NAME-stellar-operator-defaults
 
   - it: has correct app labels
     asserts:
@@ -42,4 +42,4 @@ tests:
     asserts:
       - equal:
           path: metadata.name
-          value: my-op-config
+          value: my-op-defaults

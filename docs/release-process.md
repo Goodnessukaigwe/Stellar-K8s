@@ -65,7 +65,7 @@ in dependency order:
 
 ```
 validate ──┬── build-artifacts (4 targets: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64)
-           ├── container (re-tags sha image from multiarch-build.yml, or builds fresh)
+           ├── container (re-tags sha image from ci.yml Docker Build, or builds fresh)
            ├── helm (bumps chart version, packages .tgz)
            └── security (Trivy scan on published image, uploads SARIF)
                 └── release (creates GitHub Release, uploads all artifacts + SBOM)
@@ -95,7 +95,7 @@ A CycloneDX SBOM is generated for each binary.
 
 ### `container` job
 
-Re-tags the multi-arch image published by `multiarch-build.yml` for the `sha-<commit>` label.
+Re-tags the multi-arch image published by `ci.yml` for the `sha-<commit>` label.
 Falls back to a fresh `docker buildx` build if the sha image is unavailable.
 
 Published tags for a full release (non-pre-release):
@@ -197,10 +197,10 @@ If the automated release pipeline fails partway through:
 
 | Workflow | File | Trigger |
 |---|---|---|
-| Main CI | `.github/workflows/ci.yml` | Push / PR to `main` |
-| Multi-arch build | `.github/workflows/multiarch-build.yml` | Push to `main` |
+| Main CI (incl. multi-arch Docker) | `.github/workflows/ci.yml` | Push / PR to `main` |
 | Release | `.github/workflows/release.yml` | Push `v*.*.*` tag |
-| Security scan | `.github/workflows/security-scan.yml` | Push to `main`, schedule |
+| Security scan (Trivy/Checkov) | `.github/workflows/security-scan.yml` | Push to `main`, schedule |
+| Security audit (cargo-audit/deny) | `.github/workflows/security-audit.yml` | Schedule, manual |
 | Performance | `.github/workflows/performance.yml` | Push to `main`, schedule |
 | Chaos tests | `.github/workflows/chaos-tests.yml` | Schedule |
 | Docs deploy | `.github/workflows/docs-deploy.yml` | Push to `main` |

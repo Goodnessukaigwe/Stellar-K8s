@@ -18,18 +18,35 @@ This guide walks you through setting up a local development environment for Stel
 
 ### Removed maintenance scripts
 
-The following one-off scripts were removed as part of repository hygiene (#1002). Use the supported replacements instead:
+The following one-off scripts were removed as part of repository hygiene
+(#1002, #1217). Use the supported replacements instead:
 
 | Removed | Replacement |
 |---------|-------------|
+| `scripts/cleanup_root.sh` | `scripts/cleanup.sh` (`make cleanup`) |
+| `scripts/organize_scripts.sh` | `scripts/cleanup.sh` (`make cleanup`) |
+| `scripts/archive/*` | Removed; no archive tree — use `scripts/cleanup.sh` |
+| `scripts/lib/batch.sh` | Removed with archive batch scripts |
 | `scripts/cleanup_root.sh` | Manual cleanup; no automated replacement |
-| `scripts/organize_scripts.sh` | Batch scripts live under `scripts/archive/` |
-| `scripts/dev-utils/*` | `make dev-setup`, `make preflight`, `make validate` |
+| `scripts/quickstart-verify.sh` | Golden-path quickstart verification |
+| `scripts/dev-utils/*` | `make dev-setup`, `make preflight`, `make health-fast` |
 | `benchmarks/test-webhook-local.sh` | `make benchmark-webhook` |
 | `benchmarks/run-proximity-benchmark.sh` | `make benchmark` |
 | `config/samples/benchmark-compare-example.sh` | `benchmarks/run-regression-test.sh` |
 | `src/update_check.rs` | `src/version_check.rs` (used by the operator binary) |
 | `src/kubectl_plugin/interactive.rs` | Standard kubectl-stellar subcommands |
+
+#### Repository cleanup
+
+Use the single supported cleanup tool:
+
+```bash
+make cleanup              # remove root scratch artifacts; guard obsolete paths
+make cleanup DRY_RUN=1    # report only
+# or
+./scripts/cleanup.sh
+./scripts/cleanup.sh --dry-run
+```
 
 ---
 
@@ -37,17 +54,28 @@ The following one-off scripts were removed as part of repository hygiene (#1002)
 
 You need: **Rust**, **Docker**, **kind**, **kubectl**, **Helm**, **gh**, **pre-commit**, **shellcheck**, and **k6**.
 
-The setup scripts install and pin all of these in one step — run the one that matches your OS:
+`make dev-setup` installs and configures the Rust toolchain, the Rust dev
+tools (`cargo-audit`, `cargo-watch`), and the `pre-commit` git hooks for you
+— see [Run Development Setup](#2-run-development-setup) below.
 
-```bash
-# macOS
-bash scripts/setup-mac.sh
+**Docker, kind, kubectl, Helm, gh, shellcheck, and k6 are not yet installed
+automatically** (automating OS-level package-manager installs for these is
+tracked separately) — install them manually for your OS before running
+`make dev-setup`:
 
-# Linux (Ubuntu/Debian/Fedora)
-bash scripts/setup-linux.sh
-```
+| Tool | Install docs |
+|---|---|
+| Docker | <https://docs.docker.com/engine/install/> |
+| kind | <https://kind.sigs.k8s.io/docs/user/quick-start/#installation> |
+| kubectl | <https://kubernetes.io/docs/tasks/tools/> |
+| Helm 3 | <https://helm.sh/docs/intro/install/> |
+| gh (GitHub CLI) | <https://cli.github.com/> |
+| shellcheck | <https://github.com/koalaman/shellcheck#installing> |
+| k6 | <https://k6.io/docs/get-started/installation/> |
 
-Both scripts are idempotent (safe to re-run) and print a version summary at the end.
+Once those are installed, `make dev-setup` validates the whole environment
+as its last step and tells you exactly what — if anything — is still
+missing or out of date (see [Verify Setup](#3-verify-setup)).
 
 ---
 
@@ -62,24 +90,36 @@ cd Stellar-K8s
 
 ### 2. Run Development Setup
 
-Run the setup script for your OS (see [Prerequisites](#prerequisites) above), then install the Rust components and pre-commit hooks:
+Install the manually-installed tools listed in [Prerequisites](#prerequisites) above. On Linux or macOS you can automate this step with:
+
+```bash
+./scripts/setup-dev-env.sh
+```
+
+This detects your OS and runs the matching `scripts/setup-linux.sh` or `scripts/setup-mac.sh`. Then run:
 
 ```bash
 make dev-setup
 ```
 
 This command:
-- Updates Rust to the latest stable version
-- Installs `clippy` (linter) and `rustfmt` (formatter)
-- Installs `cargo-audit` (security scanner)
-- Installs `cargo-watch` (file watcher for hot reload)
+- Updates Rust to the latest stable version and installs `clippy` (linter) and `rustfmt` (formatter)
+- Installs `cargo-audit` (security scanner) and `cargo-watch` (file watcher for hot reload)
+- Installs the `pre-commit` git hooks
+- Runs the cross-platform environment validator (`stellar-bootstrap-verify`) as its final step and prints a `[PASS]`/`[FAIL]` report
+
+If that last step reports failures, see [Verify Setup](#3-verify-setup) and [Troubleshooting](#troubleshooting) below.
 
 ### 3. Verify Setup
 
-Run a quick check to ensure everything is configured correctly:
+`make dev-setup` already runs the validator as its last step. To re-check at any time — e.g. right after installing a tool it flagged as missing — without repeating the install steps:
 
 ```bash
-# Check all required tools are installed
+# Cross-platform (Linux/macOS/Windows — no shell dependency, safe without WSL/Git Bash)
+make dev-setup-verify
+
+# Bash-only equivalent that also enforces the exact pinned minimum versions
+# in scripts/lib/versions.sh (requires bash/WSL/Git Bash)
 make preflight
 
 # Then run the repository health check (recommended before opening a PR)
@@ -89,7 +129,7 @@ make health
 make quick
 ```
 
-`make preflight` validates that `docker`, `kind`, `kubectl`, `helm`, and `cargo` are all in your `PATH` and prints an install hint for any that are missing. Fix any gaps before proceeding.
+`make dev-setup-verify` (`stellar-bootstrap-verify`) checks that `docker`, `kind`, `kubectl`, `helm`, `cargo`, and `gh` are all on your `PATH`, that `rustc` meets the minimum supported version, that you're running inside a git work tree, and whether the Docker daemon is reachable — printing one `[PASS]`/`[FAIL]` line per check plus an install hint for anything missing or outdated. Fix any reported gaps before proceeding.
 
 `make health` runs format, lint, tests, API docs drift, markdown link checks, and shellcheck (when available) in one command and stops at the first failure with a clear summary.
 
@@ -159,12 +199,20 @@ feature set (`rest-api`, `metrics`, `admission-webhook`, `k8s-v1-30`,
 exactly. Plain `cargo test --all-features` will **not** produce the same
 result.
 
-This runs **62+ tests** including:
-- 52 `StellarNodeSpec` validation tests (CRD schema validation)
-- 5 kubectl plugin tests (output formatting)
-- Controller reconciliation logic tests
-- Webhook validation tests
-- Backup scheduler tests
+Additional gates:
+
+```bash
+make test-db-migrations      # SQL forward/rollback harness (needs DATABASE_URL)
+cargo test --test otel_propagation -- --nocapture
+make yaml-schema-validate    # yamllint + CRD JSON schemas + Helm kubeconform
+make helm-unittest
+make helm-upgrade-test
+```
+
+See [docs/database/migrations.md](docs/database/migrations.md),
+[docs/yaml-schema-validation.md](docs/yaml-schema-validation.md),
+[docs/observability/tracing.md](docs/observability/tracing.md), and
+[docs/helm-chart-testing.md](docs/helm-chart-testing.md).
 
 ### Run Specific Test
 
@@ -367,12 +415,21 @@ make help          # Show all available targets and canonical flow
 
 ### Canonical Command Flow
 
+This is the single recommended command sequence for day-to-day work. Prefer
+these `make` targets over ad-hoc `cargo` invocations so local results match CI
+feature flags. Full checklist and rationale:
+[docs/development/repo-health-checklist.md](docs/development/repo-health-checklist.md).
+
 ```bash
+make preflight     # Validate required tools are installed (run first after setup)
 make dev-setup     # One-time environment setup (Rust toolchain, tools, pre-commit hooks)
 make quick         # Fast pre-commit check (fmt-check + cargo check)
+make health-fast   # Fast compile path: format + lint + compile check (no tests)
+make health        # Full contributor health gate (format + lint + tests + docs)
 make ci-local      # Full CI pipeline locally (fmt-check + lint + audit + test + build + link-check)
-make health        # Full contributor health gate
 ```
+
+`make validate` is kept as a back-compat alias for `make health-fast`.
 
 ### Development Commands
 
@@ -394,7 +451,7 @@ make clean         # Remove build artifacts
 make preflight     # Validate all required tools are installed (run this first)
 make health        # Recommended: format + lint + tests + docs (+ shellcheck)
 make quick         # Fast pre-commit check (format + compile)
-make validate      # Fast compile path: format + lint + compile check (no tests)
+make health-fast  # Fast compile path: format + lint + compile check (no tests)
 make ci-local      # Full CI pipeline locally (fmt-check + lint + audit + test + build + link-check)
 ```
 
@@ -515,6 +572,27 @@ invocations each target wraps.
 ---
 
 ## Troubleshooting
+
+### Missing or Outdated Tools
+
+**Problem**: `make dev-setup` (or `make dev-setup-verify`) reports one or more `[FAIL]` lines, e.g.:
+
+```text
+=== Stellar-K8s Bootstrap Verification ===
+  [FAIL] kind — not found in PATH — Install kind: https://kind.sigs.k8s.io/docs/user/quick-start/#installation
+  [FAIL] rustc-version — rustc 1.80 is older than the minimum supported 1.92 — run `rustup update`
+  [PASS] docker — Docker version 27.3.1, build ce12230
+=== 5/8 checks passed, 2 critical failure(s) ===
+```
+
+Each failing line names the check and an install/fix hint:
+
+- **A tool is `not found in PATH`** — install it using the link in the message (also listed in [Prerequisites](#prerequisites) above), then re-run `make dev-setup-verify`.
+- **`rustc-version` is below the minimum** — run `rustup update stable` (or re-run `make dev-setup-rust`), then re-verify.
+- **`docker-daemon` fails but `docker` itself passed** — Docker Desktop/daemon isn't running; start it. This check is a `Warning`, not `Critical`, so it won't block `make dev-setup` on its own.
+- **`git-repository` fails** — you're not inside a git work tree (e.g. you downloaded a zip instead of `git clone`-ing); re-clone the repository.
+
+Re-run `make dev-setup-verify` after each fix; it's safe to run repeatedly and only reports, it never modifies your system.
 
 ### Build Failures
 
@@ -678,17 +756,22 @@ kubectl stellar --help
 
 ## Quick Reference
 
-### Essential Commands
+Health and validation commands are listed once under
+[Canonical Command Flow](#canonical-command-flow) and in the
+[Canonical Repository Health Checklist](docs/development/repo-health-checklist.md).
+Use `make help` for the full target list.
 
+### Other useful commands
 ```bash
 # Setup
 make dev-setup                    # One-time setup
 make preflight                    # Validate required tools are installed
 make health                       # Common health gate (format, lint, test, docs)
 make quick                        # Fast pre-commit check
-make validate                     # Format + lint + compile check (no tests)
+make health-fast                 # Format + lint + compile check (no tests)
 make ci-local                     # Full CI validation
 
+```bash
 # Development (canonical — prefer make targets to match CI feature flags)
 make build                        # Build release (wraps `cargo build --release --locked`)
 make test                         # Run tests (wraps `cargo test` with project features)

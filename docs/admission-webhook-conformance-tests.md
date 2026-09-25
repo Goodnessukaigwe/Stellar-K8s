@@ -20,7 +20,9 @@ AdmissionReview → WebhookServer::validate
 ```
 
 All 52 tests are **hermetic** — no Kubernetes cluster, network connection, or
-external service is required.
+external service is required. Every test shares one `new_server()` helper for
+constructing the `WebhookServer` under test, so the construction path can't
+drift between individual tests as the suite grows.
 
 ## Running the Tests
 
@@ -205,6 +207,8 @@ operations. The first stage that fails short-circuits the rest.
 | File | Purpose |
 |------|---------|
 | `tests/admission_webhook_conformance.rs` | This conformance test suite |
+| `tests/webhook_payload_contract.rs` | HTTP malformed/boundary payload contracts (#1152) |
+| `docs/webhook-payload-contract-tests.md` | Documentation for the HTTP contract suite |
 | `src/webhook/server.rs` | `WebhookServer`, `validate_spec_builtin`, HTTP handlers |
 | `src/webhook/org_validator.rs` | Organisational-standards validator |
 | `src/crd/stellar_node.rs` | `StellarNodeSpec::validate()` |

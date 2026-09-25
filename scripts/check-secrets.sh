@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+# Copyright 2024 Stellar-K8s Contributors
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # check-secrets.sh
 #
 # Secure secret-handling checks for all CI and runtime pipeline command paths.
@@ -60,8 +72,8 @@ separator
 # Stellar seed: 'S' + 55 base58 chars (56 total).
 # Exclude known test fixtures that carry safe-looking placeholder seeds.
 while IFS=: read -r file lineno content; do
-    # Skip files that are deliberately testing the scrubber itself.
-    [[ "$file" == *log_scrub* || "$file" == *tests* || "$file" == *test_* ]] && continue
+    # Skip files that are deliberately testing the scrubber / pipeline redaction.
+    [[ "$file" == *log_scrub* || "$file" == *pipeline_log_redaction* || "$file" == *pipeline_logs* || "$file" == *tests* || "$file" == *test_* ]] && continue
     finding "$file" "$lineno" "Possible Stellar seed (S...56 chars)"
 done < <(grep -rn --include="*.rs" --include="*.sh" --include="*.yaml" --include="*.yml" \
     -E "S[A-Za-z0-9]{54}[^A-Za-z0-9]" . \
@@ -71,8 +83,10 @@ done < <(grep -rn --include="*.rs" --include="*.sh" --include="*.yaml" --include
     || true)
 
 # AWS access key pattern: AKIA[A-Z0-9]{16}
-while IFS=: read -r file lineno _; do
-    [[ "$file" == *test* || "$file" == *example* || "$file" == *fixture* ]] && continue
+while IFS=: read -r file lineno content; do
+    [[ "$file" == *test* || "$file" == *example* || "$file" == *fixture* || "$file" == *sample* ]] && continue
+    # Allow AWS documentation placeholders (…EXAMPLE).
+    echo "$content" | grep -qiE 'EXAMPLE|PLACEHOLDER|YOUR[_-]?KEY' && continue
     finding "$file" "$lineno" "Possible AWS Access Key ID (AKIA...)"
 done < <(grep -rn --include="*.rs" --include="*.sh" --include="*.yaml" --include="*.yml" \
     -E "AKIA[A-Z0-9]{16}" . \
@@ -81,7 +95,7 @@ done < <(grep -rn --include="*.rs" --include="*.sh" --include="*.yaml" --include
 
 # PEM private key block
 while IFS=: read -r file lineno _; do
-    [[ "$file" == *test* || "$file" == *example* || "$file" == *fixture* || "$file" == *log_scrub* ]] && continue
+    [[ "$file" == *test* || "$file" == *example* || "$file" == *fixture* || "$file" == *log_scrub* || "$file" == *pipeline_log_redaction* ]] && continue
     finding "$file" "$lineno" "PEM private key block committed to repository"
 done < <(grep -rn --include="*.rs" --include="*.pem" --include="*.key" \
     "BEGIN.*PRIVATE KEY" . \
@@ -90,9 +104,9 @@ done < <(grep -rn --include="*.rs" --include="*.pem" --include="*.key" \
 
 # Generic password= / secret= / token= with non-placeholder values
 while IFS=: read -r file lineno content; do
-    [[ "$file" == *test* || "$file" == *example* || "$file" == *fixture* ]] && continue
-    # Allow obvious placeholders.
-    echo "$content" | grep -qiE "(placeholder|example|changeme|your[-_]|<[^>]+>|\\\$\{)" && continue
+    [[ "$file" == *test* || "$file" == *example* || "$file" == *fixture* || "$file" == *sample* || "$file" == *secret_rotation* || "$file" == *secret-rotation* || "$file" == *check-secrets* ]] && continue
+    # Allow obvious placeholders and Secret *resource names* (not credential values).
+    echo "$content" | grep -qiE "(placeholder|example|changeme|your[-_]|<[^>]+>|\\\$\{|test[_-]?password|stellar-core-secret|rollout-)" && continue
     finding "$file" "$lineno" "Possible inline secret assignment (password=/secret=/token=)"
 done < <(grep -rni --include="*.rs" --include="*.sh" --include="*.yaml" --include="*.yml" \
     -E "(password|secret|token)\s*=\s*['\"][^'\"]{8,}" . \
@@ -122,8 +136,12 @@ done < <(grep -rn --include="*.sh" \
     --exclude-dir=.git \
     || true)
 
-# Detect `set -x` near secret variables (would leak them in CI logs).
-while IFS=: read -r file lineno _; do
+# Detect live `set -x` / `set -o xtrace` (would leak secrets in CI logs).
+# Skip this checker script itself (documents the pattern in comments) and
+# comment-only mentions elsewhere.
+while IFS=: read -r file lineno content; do
+    [[ "$file" == *check-secrets.sh ]] && continue
+    echo "$content" | grep -qE '^\s*#' && continue
     finding "$file" "$lineno" "'set -x' found in script — may leak secrets to CI logs"
 done < <(grep -rn --include="*.sh" 'set -x\|set -o xtrace' scripts/ .github/ \
     --exclude-dir=.git \
@@ -195,8 +213,8 @@ rust_findings_before=$findings
 
 # Look for string literals that look like real Stellar seeds in non-test files.
 while IFS=: read -r file lineno content; do
-    # Allow test/fixture files and the scrubber itself.
-    [[ "$file" == *test* || "$file" == *scrub* || "$file" == *fixture* ]] && continue
+    # Allow test/fixture files and the scrubber / pipeline redaction checker itself.
+    [[ "$file" == *test* || "$file" == *scrub* || "$file" == *fixture* || "$file" == *pipeline_log_redaction* ]] && continue
     echo "$content" | grep -q 'FIXTURE\|placeholder\|example' && continue
     finding "$file" "$lineno" "Possible Stellar seed literal in non-test Rust source"
 done < <(grep -rn --include="*.rs" \

@@ -2,6 +2,8 @@
 
 This guide details best practices for running and optimizing PostgreSQL databases for the Stellar-K8s operator and high-performance Horizon / Soroban RPC workloads.
 
+Operator-owned SQL migration conventions and the automated harness are documented in [migrations.md](migrations.md).
+
 ---
 
 ## 1. Connection Pooling (PgBouncer)

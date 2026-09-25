@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Log scrubbing layer for sensitive data redaction
 //!
 //! # Redaction Policy
@@ -211,21 +223,21 @@ impl<'writer> tracing::field::Visit for RedactingFieldVisitor<'writer> {
 
 impl<'writer> RedactingFieldVisitor<'writer> {
     fn write_field(&mut self, field: &tracing::field::Field, value: &str) {
+        self.write_field_name_value(field.name(), value);
+    }
+
+    fn write_field_name_value(&mut self, name: &str, value: &str) {
         if self.has_fields {
             let _ = write!(self.writer, " ");
         } else {
             self.has_fields = true;
         }
-        let _ = write!(self.writer, "{}={}", field.name(), value);
+        let _ = write!(self.writer, "{name}={value}");
     }
 }
 
 impl<'writer> FormatFields<'writer> for RedactingFields {
-    fn format_fields<R>(
-        &self,
-        writer: Writer<'writer>,
-        fields: R,
-    ) -> fmt::Result
+    fn format_fields<R>(&self, writer: Writer<'writer>, fields: R) -> fmt::Result
     where
         R: RecordFields,
     {
@@ -234,6 +246,10 @@ impl<'writer> FormatFields<'writer> for RedactingFields {
             has_fields: false,
         };
         fields.record(&mut visitor);
+        if let Some((trace_id, span_id)) = crate::telemetry::current_trace_context() {
+            visitor.write_field_name_value("trace_id", &trace_id);
+            visitor.write_field_name_value("span_id", &span_id);
+        }
         Ok(())
     }
 }

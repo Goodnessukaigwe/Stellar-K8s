@@ -82,10 +82,10 @@ tests:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/stellar/stellar-k8s:0.1.0
 
-  - it: deployment does not include sidecar container by default
+  - it: deployment includes sidecar container by default
     template: templates/deployment.yaml
     asserts:
-      - notContains:
+      - contains:
           path: spec.template.spec.containers
           content:
             name: crash-analyzer
@@ -97,6 +97,17 @@ tests:
       sidecar.enabled: true
     asserts:
       - contains:
+          path: spec.template.spec.containers
+          content:
+            name: crash-analyzer
+          any: true
+
+  - it: sidecar container absent when sidecar.enabled is false
+    template: templates/deployment.yaml
+    set:
+      sidecar.enabled: false
+    asserts:
+      - notContains:
           path: spec.template.spec.containers
           content:
             name: crash-analyzer

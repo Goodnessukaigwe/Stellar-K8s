@@ -1,20 +1,29 @@
-mod cli;
-mod commands;
-
-use crate::cli::{Args, BackupCommands, Commands};
-use crate::commands::backup::{run_backup, run_cleanup, run_list, run_restore};
-use crate::commands::benchmark::run_benchmark_controller_cmd;
-use crate::commands::check_crd::run_check_crd;
-use crate::commands::doctor::run_doctor;
-use crate::commands::export_compliance::run_export_compliance;
-use crate::commands::health_check::run_health_check;
-use crate::commands::info::run_info;
-use crate::commands::operator::run_operator;
-use crate::commands::runbook::run_generate_runbook;
-use crate::commands::simulator::run_simulator;
-use crate::commands::webhook::run_webhook;
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use clap::Parser;
 use std::process;
+use stellar_k8s::cli::{Args, BackupCommands, Commands};
+use stellar_k8s::commands::backup::{run_backup, run_cleanup, run_list, run_restore};
+use stellar_k8s::commands::benchmark::run_benchmark_controller_cmd;
+use stellar_k8s::commands::check_crd::run_check_crd;
+use stellar_k8s::commands::doctor::run_doctor;
+use stellar_k8s::commands::export_compliance::run_export_compliance;
+use stellar_k8s::commands::health_check::run_health_check;
+use stellar_k8s::commands::info::run_info;
+use stellar_k8s::commands::operator::run_operator;
+use stellar_k8s::commands::runbook::run_generate_runbook;
+use stellar_k8s::commands::simulator::run_simulator;
+use stellar_k8s::commands::webhook::run_webhook;
 
 use stellar_k8s::controller::archive_prune::prune_archive;
 use stellar_k8s::controller::diff::diff;
@@ -22,7 +31,20 @@ use stellar_k8s::version_check;
 use stellar_k8s::{incident, Error};
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() {
+    // rustls 0.23 requires an explicit crypto provider when aws-lc-rs/ring are
+    // not auto-selected via default features (common with kube/reqwest stacks).
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("failed to install rustls ring CryptoProvider");
+
+    if let Err(e) = run().await {
+        eprintln!("Error: {e}");
+        std::process::exit(e.exit_code());
+    }
+}
+
+async fn run() -> Result<(), Error> {
     let args = Args::parse();
 
     let offline = args.offline;
@@ -105,8 +127,7 @@ async fn main() -> Result<(), Error> {
         }
         Commands::Run(run_args) => {
             if let Err(e) = run_args.validate() {
-                eprintln!("error: {e}");
-                process::exit(2);
+                return Err(Error::validation_step("run args", e));
             }
             return run_operator(run_args).await;
         }

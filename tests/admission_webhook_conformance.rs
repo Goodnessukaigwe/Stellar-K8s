@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Admission Webhook Conformance Tests for Invalid CRD Payloads (#1052)
 //!
 //! This test suite exercises the `WebhookServer::validate` pipeline end-to-end
@@ -50,12 +62,23 @@
 
 use std::collections::BTreeMap;
 
-use stellar_k8s::webhook::{WasmRuntime, WebhookServer};
 use stellar_k8s::webhook::types::{Operation, UserInfo, ValidationInput};
+use stellar_k8s::webhook::{WasmRuntime, WebhookServer};
 
 // ---------------------------------------------------------------------------
 // Helper utilities
 // ---------------------------------------------------------------------------
+
+/// Construct a fresh, hermetic webhook server for a single conformance check.
+///
+/// Every test in this suite needs an isolated `WebhookServer` instance — pulling
+/// this one line out to a shared helper keeps all 52+ tests using the exact same
+/// construction path, so a future change to server setup (e.g. wiring in a real
+/// plugin runtime) only needs to happen in one place instead of drifting across
+/// call sites.
+fn new_server() -> WebhookServer {
+    WebhookServer::new(WasmRuntime::new().unwrap())
+}
 
 /// Build a [`ValidationInput`] with sensible defaults, suitable for driving
 /// [`WebhookServer::validate`] in tests.
@@ -77,10 +100,7 @@ fn make_input(operation: Operation, object: Option<serde_json::Value>) -> Valida
 }
 
 /// Build an `UPDATE` [`ValidationInput`] with the supplied current and old objects.
-fn make_update_input(
-    object: serde_json::Value,
-    old_object: serde_json::Value,
-) -> ValidationInput {
+fn make_update_input(object: serde_json::Value, old_object: serde_json::Value) -> ValidationInput {
     ValidationInput {
         operation: Operation::Update,
         object: Some(object),
@@ -176,7 +196,7 @@ fn valid_soroban_json() -> serde_json::Value {
 
 #[tokio::test]
 async fn conformance_valid_validator_is_admitted() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let result = server
         .validate(make_input(Operation::Create, Some(valid_validator_json())))
         .await;
@@ -189,7 +209,7 @@ async fn conformance_valid_validator_is_admitted() {
 
 #[tokio::test]
 async fn conformance_valid_horizon_is_admitted() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let result = server
         .validate(make_input(Operation::Create, Some(valid_horizon_json())))
         .await;
@@ -202,7 +222,7 @@ async fn conformance_valid_horizon_is_admitted() {
 
 #[tokio::test]
 async fn conformance_valid_soroban_is_admitted() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let result = server
         .validate(make_input(Operation::Create, Some(valid_soroban_json())))
         .await;
@@ -220,7 +240,7 @@ async fn conformance_valid_soroban_is_admitted() {
 /// An empty JSON object `{}` cannot be deserialized as a StellarNode.
 #[tokio::test]
 async fn conformance_empty_object_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let result = server
         .validate(make_input(Operation::Create, Some(serde_json::json!({}))))
         .await;
@@ -233,7 +253,7 @@ async fn conformance_empty_object_is_denied() {
 /// A StellarNode JSON missing the `spec` key entirely must be denied.
 #[tokio::test]
 async fn conformance_missing_spec_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "no-spec",
@@ -243,16 +263,13 @@ async fn conformance_missing_spec_is_denied() {
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
         .await;
-    assert!(
-        !result.allowed,
-        "payload missing spec must be denied"
-    );
+    assert!(!result.allowed, "payload missing spec must be denied");
 }
 
 /// A StellarNode JSON with `spec: null` must be denied.
 #[tokio::test]
 async fn conformance_null_spec_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": { "name": "null-spec", "namespace": "default" },
         "spec": null
@@ -260,20 +277,17 @@ async fn conformance_null_spec_is_denied() {
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
         .await;
-    assert!(
-        !result.allowed,
-        "null spec must be denied"
-    );
+    assert!(!result.allowed, "null spec must be denied");
 }
 
 /// A `None` object (no object attached to the review) is treated as admitted
 /// because the server cannot validate what it cannot see.
 #[tokio::test]
 async fn conformance_none_object_is_admitted_with_no_plugins() {
+    let server = new_server();
+    let result = server.validate(make_input(Operation::Create, None)).await;
     let server = WebhookServer::new(WasmRuntime::new().unwrap());
-    let result = server
-        .validate(make_input(Operation::Create, None))
-        .await;
+    let result = server.validate(make_input(Operation::Create, None)).await;
     // With no plugins and no object the server allows through
     assert!(
         result.allowed,
@@ -285,7 +299,7 @@ async fn conformance_none_object_is_admitted_with_no_plugins() {
 /// A payload that is valid JSON but not a StellarNode (a random object) must be denied.
 #[tokio::test]
 async fn conformance_non_stellarnode_json_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "kind": "Pod",
         "metadata": { "name": "wrong-kind" },
@@ -294,10 +308,7 @@ async fn conformance_non_stellarnode_json_is_denied() {
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
         .await;
-    assert!(
-        !result.allowed,
-        "non-StellarNode JSON must be denied"
-    );
+    assert!(!result.allowed, "non-StellarNode JSON must be denied");
 }
 
 // ---------------------------------------------------------------------------
@@ -306,7 +317,7 @@ async fn conformance_non_stellarnode_json_is_denied() {
 
 #[tokio::test]
 async fn conformance_unknown_node_type_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "bad-type",
@@ -335,7 +346,7 @@ async fn conformance_unknown_node_type_is_denied() {
 
 #[tokio::test]
 async fn conformance_empty_node_type_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "empty-type",
@@ -360,7 +371,7 @@ async fn conformance_empty_node_type_is_denied() {
 
 #[tokio::test]
 async fn conformance_validator_missing_config_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     // Remove validatorConfig
     payload["spec"]
@@ -371,7 +382,10 @@ async fn conformance_validator_missing_config_is_denied() {
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
         .await;
-    assert!(!result.allowed, "Validator without validatorConfig must be denied");
+    assert!(
+        !result.allowed,
+        "Validator without validatorConfig must be denied"
+    );
     let msg = result.message.unwrap_or_default();
     assert!(
         msg.contains("validatorConfig") || msg.contains("required"),
@@ -381,7 +395,7 @@ async fn conformance_validator_missing_config_is_denied() {
 
 #[tokio::test]
 async fn conformance_validator_with_two_replicas_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["replicas"] = serde_json::json!(2);
     let result = server
@@ -397,7 +411,7 @@ async fn conformance_validator_with_two_replicas_is_denied() {
 
 #[tokio::test]
 async fn conformance_validator_with_zero_replicas_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["replicas"] = serde_json::json!(0);
     let result = server
@@ -408,7 +422,7 @@ async fn conformance_validator_with_zero_replicas_is_denied() {
 
 #[tokio::test]
 async fn conformance_validator_with_autoscaling_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["autoscaling"] = serde_json::json!({
         "minReplicas": 1,
@@ -428,7 +442,7 @@ async fn conformance_validator_with_autoscaling_is_denied() {
 
 #[tokio::test]
 async fn conformance_validator_with_ingress_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["ingress"] = serde_json::json!({
         "className": "nginx",
@@ -448,7 +462,7 @@ async fn conformance_validator_with_ingress_is_denied() {
 /// When `enableHistoryArchive` is true, `historyArchiveUrls` must be non-empty.
 #[tokio::test]
 async fn conformance_validator_history_archive_without_urls_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["validatorConfig"]["enableHistoryArchive"] = serde_json::json!(true);
     payload["spec"]["validatorConfig"]["historyArchiveUrls"] = serde_json::json!([]);
@@ -469,7 +483,7 @@ async fn conformance_validator_history_archive_without_urls_is_denied() {
 /// Providing history archive URLs when the flag is enabled is valid.
 #[tokio::test]
 async fn conformance_validator_history_archive_with_urls_is_admitted() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["validatorConfig"]["enableHistoryArchive"] = serde_json::json!(true);
     payload["spec"]["validatorConfig"]["historyArchiveUrls"] =
@@ -490,7 +504,7 @@ async fn conformance_validator_history_archive_with_urls_is_admitted() {
 
 #[tokio::test]
 async fn conformance_horizon_missing_config_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_horizon_json();
     payload["spec"]
         .as_object_mut()
@@ -499,7 +513,10 @@ async fn conformance_horizon_missing_config_is_denied() {
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
         .await;
-    assert!(!result.allowed, "Horizon without horizonConfig must be denied");
+    assert!(
+        !result.allowed,
+        "Horizon without horizonConfig must be denied"
+    );
     let msg = result.message.unwrap_or_default();
     assert!(
         msg.contains("horizonConfig") || msg.contains("required"),
@@ -510,7 +527,7 @@ async fn conformance_horizon_missing_config_is_denied() {
 /// A Horizon node with `nodeType: Validator` payload but horizon config is incoherent.
 #[tokio::test]
 async fn conformance_horizon_with_validator_node_type_no_validator_config_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "mixed-types",
@@ -538,7 +555,7 @@ async fn conformance_horizon_with_validator_node_type_no_validator_config_is_den
 
 #[tokio::test]
 async fn conformance_horizon_multiple_replicas_is_admitted() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_horizon_json();
     payload["spec"]["replicas"] = serde_json::json!(5);
     let result = server
@@ -557,7 +574,7 @@ async fn conformance_horizon_multiple_replicas_is_admitted() {
 
 #[tokio::test]
 async fn conformance_soroban_missing_config_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_soroban_json();
     payload["spec"]
         .as_object_mut()
@@ -566,7 +583,10 @@ async fn conformance_soroban_missing_config_is_denied() {
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
         .await;
-    assert!(!result.allowed, "SorobanRpc without sorobanConfig must be denied");
+    assert!(
+        !result.allowed,
+        "SorobanRpc without sorobanConfig must be denied"
+    );
     let msg = result.message.unwrap_or_default();
     assert!(
         msg.contains("sorobanConfig") || msg.contains("required"),
@@ -576,7 +596,7 @@ async fn conformance_soroban_missing_config_is_denied() {
 
 #[tokio::test]
 async fn conformance_soroban_multiple_replicas_is_admitted() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_soroban_json();
     payload["spec"]["replicas"] = serde_json::json!(4);
     let result = server
@@ -597,7 +617,7 @@ async fn conformance_soroban_multiple_replicas_is_admitted() {
 /// conflict and must be denied.
 #[tokio::test]
 async fn conformance_pdb_min_available_and_max_unavailable_conflict_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_horizon_json();
     payload["spec"]["minAvailable"] = serde_json::json!(1);
     payload["spec"]["maxUnavailable"] = serde_json::json!(1);
@@ -618,13 +638,17 @@ async fn conformance_pdb_min_available_and_max_unavailable_conflict_is_denied() 
 /// Setting both `database` (external) and `managedDatabase` is mutually exclusive.
 #[tokio::test]
 async fn conformance_both_database_and_managed_database_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_horizon_json();
     payload["spec"]["database"] = serde_json::json!({
-        "secretRef": "pg-secret"
+        "host": "db.example.com",
+        "port": 5432,
+        "database": "stellar",
+        "user": "admin",
+        "passwordSecret": "pg-secret"
     });
     payload["spec"]["managedDatabase"] = serde_json::json!({
-        "storageSize": "50Gi"
+        "storage": { "size": "50Gi", "storageClass": "standard" }
     });
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
@@ -643,7 +667,7 @@ async fn conformance_both_database_and_managed_database_is_denied() {
 /// A custom network name that violates DNS-1123 must be denied.
 #[tokio::test]
 async fn conformance_invalid_custom_network_name_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "custom-net",
@@ -675,7 +699,7 @@ async fn conformance_invalid_custom_network_name_is_denied() {
 /// A custom network name that exceeds 63 characters must be denied.
 #[tokio::test]
 async fn conformance_custom_network_name_too_long_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let long_name = "a".repeat(64); // 64 chars — one over the limit
     let payload = serde_json::json!({
         "metadata": {
@@ -711,7 +735,7 @@ async fn conformance_custom_network_name_too_long_is_denied() {
 /// Missing `project-id` label must be denied.
 #[tokio::test]
 async fn conformance_missing_project_id_label_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "no-project-id",
@@ -744,7 +768,7 @@ async fn conformance_missing_project_id_label_is_denied() {
 /// Missing `owner` label must be denied.
 #[tokio::test]
 async fn conformance_missing_owner_label_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "no-owner",
@@ -777,7 +801,7 @@ async fn conformance_missing_owner_label_is_denied() {
 /// A node with no labels at all must be denied.
 #[tokio::test]
 async fn conformance_no_labels_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "no-labels",
@@ -804,7 +828,7 @@ async fn conformance_no_labels_is_denied() {
 /// An empty `project-id` label value (whitespace only) must be denied.
 #[tokio::test]
 async fn conformance_empty_project_id_label_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "empty-label",
@@ -837,7 +861,7 @@ async fn conformance_empty_project_id_label_is_denied() {
 /// Validators are capped at 8 cores (8000m).
 #[tokio::test]
 async fn conformance_validator_cpu_limit_exceeds_max_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["resources"] = serde_json::json!({
         "requests": { "cpu": "1", "memory": "1Gi" },
@@ -862,7 +886,7 @@ async fn conformance_validator_cpu_limit_exceeds_max_is_denied() {
 /// Validators are capped at 16 GiB.
 #[tokio::test]
 async fn conformance_validator_memory_limit_exceeds_max_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["resources"] = serde_json::json!({
         "requests": { "cpu": "1", "memory": "1Gi" },
@@ -885,7 +909,7 @@ async fn conformance_validator_memory_limit_exceeds_max_is_denied() {
 /// An empty CPU request (zero / empty string) must be denied.
 #[tokio::test]
 async fn conformance_empty_cpu_request_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["resources"] = serde_json::json!({
         "requests": { "cpu": "0", "memory": "1Gi" },
@@ -905,7 +929,7 @@ async fn conformance_empty_cpu_request_is_denied() {
 /// An empty memory request must be denied.
 #[tokio::test]
 async fn conformance_empty_memory_request_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["resources"] = serde_json::json!({
         "requests": { "cpu": "500m", "memory": "0" },
@@ -920,7 +944,7 @@ async fn conformance_empty_memory_request_is_denied() {
 /// An empty CPU limit must be denied.
 #[tokio::test]
 async fn conformance_empty_cpu_limit_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["resources"] = serde_json::json!({
         "requests": { "cpu": "500m", "memory": "1Gi" },
@@ -935,7 +959,7 @@ async fn conformance_empty_cpu_limit_is_denied() {
 /// An empty memory limit must be denied.
 #[tokio::test]
 async fn conformance_empty_memory_limit_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["resources"] = serde_json::json!({
         "requests": { "cpu": "500m", "memory": "1Gi" },
@@ -950,7 +974,7 @@ async fn conformance_empty_memory_limit_is_denied() {
 /// Mainnet Validator under-provisioned (below 2-core / 4 GiB min requests for production).
 #[tokio::test]
 async fn conformance_mainnet_validator_underprovisionned_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": {
             "name": "underpowered",
@@ -990,7 +1014,7 @@ async fn conformance_mainnet_validator_underprovisionned_is_denied() {
 /// profile and must be denied.
 #[tokio::test]
 async fn conformance_privileged_security_context_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["securityContext"] = serde_json::json!({
         "privileged": true
@@ -1019,7 +1043,7 @@ async fn conformance_privileged_security_context_is_denied() {
 /// A `snapshotRef` must not set both `volumeSnapshotName` and `backupUrl`.
 #[tokio::test]
 async fn conformance_snapshot_ref_both_fields_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["storage"] = serde_json::json!({
         "storageClass": "standard",
@@ -1046,7 +1070,7 @@ async fn conformance_snapshot_ref_both_fields_is_denied() {
 /// A `snapshotRef` with neither field set is invalid.
 #[tokio::test]
 async fn conformance_snapshot_ref_no_fields_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["storage"] = serde_json::json!({
         "storageClass": "standard",
@@ -1065,7 +1089,7 @@ async fn conformance_snapshot_ref_no_fields_is_denied() {
 /// `LocalStorage` mode without a `storageClass` or `nodeAffinity` must be denied.
 #[tokio::test]
 async fn conformance_local_storage_without_class_or_affinity_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["storage"] = serde_json::json!({
         "storageClass": "",
@@ -1093,7 +1117,7 @@ async fn conformance_local_storage_without_class_or_affinity_is_denied() {
 /// `DELETE` operations bypass spec validation and must always be admitted.
 #[tokio::test]
 async fn conformance_delete_operation_bypasses_spec_validation() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     // Even with an invalid object, DELETE is admitted (resource is being removed)
     let invalid_payload = serde_json::json!({
         "metadata": { "name": "being-deleted", "namespace": "default" },
@@ -1112,7 +1136,7 @@ async fn conformance_delete_operation_bypasses_spec_validation() {
 /// `CONNECT` operations bypass spec validation and must always be admitted.
 #[tokio::test]
 async fn conformance_connect_operation_bypasses_spec_validation() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let payload = serde_json::json!({
         "metadata": { "name": "connecting", "namespace": "default" }
     });
@@ -1133,7 +1157,7 @@ async fn conformance_connect_operation_bypasses_spec_validation() {
 /// A valid UPDATE (changing `version`) must be admitted.
 #[tokio::test]
 async fn conformance_valid_update_is_admitted() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let old = valid_validator_json();
     let mut new = valid_validator_json();
     new["spec"]["version"] = serde_json::json!("v22.0.0");
@@ -1148,7 +1172,7 @@ async fn conformance_valid_update_is_admitted() {
 /// An UPDATE that introduces a missing `validatorConfig` must be denied.
 #[tokio::test]
 async fn conformance_update_removing_validator_config_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let old = valid_validator_json();
     let mut new = valid_validator_json();
     new["spec"]
@@ -1165,7 +1189,7 @@ async fn conformance_update_removing_validator_config_is_denied() {
 /// An UPDATE that adds an invalid autoscaling config to a Validator must be denied.
 #[tokio::test]
 async fn conformance_update_adding_autoscaling_to_validator_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let old = valid_validator_json();
     let mut new = valid_validator_json();
     new["spec"]["autoscaling"] = serde_json::json!({
@@ -1183,7 +1207,7 @@ async fn conformance_update_adding_autoscaling_to_validator_is_denied() {
 /// An UPDATE on Horizon that drops the required `owner` label must be denied.
 #[tokio::test]
 async fn conformance_update_dropping_required_label_is_denied() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let old = valid_horizon_json();
     let mut new = valid_horizon_json();
     new["metadata"]["labels"]
@@ -1205,7 +1229,7 @@ async fn conformance_update_dropping_required_label_is_denied() {
 /// for operators debugging admission failures.
 #[tokio::test]
 async fn conformance_rejection_messages_are_non_empty() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
 
     let invalid_cases: Vec<(&str, serde_json::Value)> = vec![
         ("missing_validator_config", {
@@ -1240,7 +1264,8 @@ async fn conformance_rejection_messages_are_non_empty() {
         );
         // Ensure the message contains only valid UTF-8 printable text
         assert!(
-            msg.chars().all(|c| !c.is_control() || c == '\n' || c == '\t'),
+            msg.chars()
+                .all(|c| !c.is_control() || c == '\n' || c == '\t'),
             "[{label}] message contains unexpected control characters: {msg:?}"
         );
     }
@@ -1249,7 +1274,7 @@ async fn conformance_rejection_messages_are_non_empty() {
 /// A `version` of `"latest"` must be admitted (but may carry an image-pinning warning).
 #[tokio::test]
 async fn conformance_latest_version_tag_admitted_with_warning() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
     payload["spec"]["version"] = serde_json::json!("latest");
     let result = server
@@ -1270,7 +1295,7 @@ async fn conformance_latest_version_tag_admitted_with_warning() {
 /// be admitted but carry a mutable-tag warning.
 #[tokio::test]
 async fn conformance_mutable_version_tag_admitted_with_warning() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let result = server
         .validate(make_input(Operation::Create, Some(valid_validator_json())))
         .await;
@@ -1289,10 +1314,11 @@ async fn conformance_mutable_version_tag_admitted_with_warning() {
 /// A version pinned by digest must be admitted and produce no image-pinning warning.
 #[tokio::test]
 async fn conformance_digest_pinned_version_admitted_without_warning() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     let mut payload = valid_validator_json();
-    payload["spec"]["version"] =
-        serde_json::json!("v21.0.0@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1");
+    payload["spec"]["version"] = serde_json::json!(
+        "v21.0.0@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
+    );
     let result = server
         .validate(make_input(Operation::Create, Some(payload)))
         .await;
@@ -1317,7 +1343,7 @@ async fn conformance_digest_pinned_version_admitted_without_warning() {
 /// one denial (not silently swallowed after the first error).
 #[tokio::test]
 async fn conformance_multiple_violations_all_reported() {
-    let server = WebhookServer::new(WasmRuntime::new().unwrap());
+    let server = new_server();
     // Validator: wrong replicas AND no validatorConfig AND missing labels
     let payload = serde_json::json!({
         "metadata": {

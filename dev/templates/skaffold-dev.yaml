@@ -1,2 +1,0 @@
-# skaffold-dev.yaml — pointer to root skaffold.yaml (canonical dev build config)
-# Use: skaffold dev -f skaffold.yaml

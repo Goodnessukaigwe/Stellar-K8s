@@ -1,8 +1,8 @@
 name: Release Gate
 
-# Enforces every hard gate documented in RELEASE_CHECKLIST.md before
-# a release tag is allowed to proceed to the main release workflow.
-# This job runs BEFORE release.yml publishes any artifacts.
+# Pre-publish gates that are NOT already covered by release.yml validate
+# (semver / Cargo.toml) or by ci.yml / release.yml helm lint & cargo audit.
+# Unique value: CHANGELOG entry + Helm unit tests.
 
 on:
   push:
@@ -20,26 +20,19 @@ jobs:
   gate:
     name: Release Validation Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          cache-key: "release-gate"
-
       - name: Install Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
         with:
           version: "v3.16.0"
 
       - name: Install helm-unittest plugin
         run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --version v0.5.1
-
-      - name: Install cargo-audit
-        run: cargo install --locked cargo-audit
 
       - name: Extract version from tag
         id: version
@@ -49,50 +42,8 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Releasing version: ${VERSION}"
 
-      # ── Gate 1: semver format ────────────────────────────────────────────
-      - name: Gate 1 — Validate semver format
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
-            echo "✓ Version '$VERSION' is valid semver"
-          else
-            echo "::error::Version '$VERSION' is NOT valid semver (expected X.Y.Z)"
-            exit 1
-          fi
-
-      # ── Gate 2: Cargo.toml version ──────────────────────────────────────
-      - name: Gate 2 — Cargo.toml version matches tag
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
-          if [[ "$CARGO_VERSION" == "$VERSION" ]]; then
-            echo "✓ Cargo.toml version ($CARGO_VERSION) matches tag"
-          else
-            echo "::error::Cargo.toml version ($CARGO_VERSION) != tag ($VERSION)"
-            echo "::error::Update the version field in Cargo.toml before tagging."
-            exit 1
-          fi
-
-      # ── Gate 3: Chart.yaml version ──────────────────────────────────────
-      - name: Gate 3 — Chart.yaml version and appVersion match tag
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          CHART_VERSION=$(grep '^version:' charts/stellar-operator/Chart.yaml | head -1 | awk '{print $2}')
-          CHART_APP=$(grep '^appVersion:' charts/stellar-operator/Chart.yaml | head -1 | awk '{print $2}' | tr -d '"')
-
-          ERRORS=0
-          if [[ "$CHART_VERSION" != "$VERSION" ]]; then
-            echo "::error::Chart.yaml version ($CHART_VERSION) != tag ($VERSION)"
-            ERRORS=$((ERRORS + 1))
-          fi
-          if [[ "$CHART_APP" != "$VERSION" ]]; then
-            echo "::error::Chart.yaml appVersion ($CHART_APP) != tag ($VERSION)"
-            ERRORS=$((ERRORS + 1))
-          fi
-          [[ "$ERRORS" -eq 0 ]] && echo "✓ Chart.yaml version and appVersion match" || exit 1
-
-      # ── Gate 4: CHANGELOG entry ──────────────────────────────────────────
-      - name: Gate 4 — CHANGELOG.md has entry for this version
+      # ── Gate 1: CHANGELOG entry (unique to release-gate) ──────────────────
+      - name: Gate 1 — CHANGELOG.md has entry for this version
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           if grep -qE "^## \[?v?${VERSION}\]?" CHANGELOG.md; then
@@ -103,26 +54,8 @@ jobs:
             exit 1
           fi
 
-      # ── Gate 5: cargo audit ──────────────────────────────────────────────
-      - name: Gate 5 — cargo audit (no unignored vulnerabilities)
-        run: |
-          set +e
-          cargo audit 2>&1 | tee audit-output.txt
-          if grep -qE "^error\[" audit-output.txt; then
-            echo "::error::cargo audit found unignored vulnerabilities."
-            echo "::error::Resolve the issues or add exceptions to .cargo/audit.toml"
-            exit 1
-          fi
-          echo "✓ cargo audit passed"
-
-      # ── Gate 6: Helm lint ────────────────────────────────────────────────
-      - name: Gate 6 — Helm lint (strict)
-        run: |
-          helm lint charts/stellar-operator --strict
-          echo "✓ helm lint --strict passed"
-
-      # ── Gate 7: Helm unit tests ──────────────────────────────────────────
-      - name: Gate 7 — Helm unit tests
+      # ── Gate 2: Helm unit tests (not covered by release.yml helm lint) ───
+      - name: Gate 2 — Helm unit tests
         run: |
           helm unittest charts/stellar-operator --strict --color
           echo "✓ helm unittest --strict passed"
@@ -132,6 +65,8 @@ jobs:
         run: |
           echo ""
           echo "══════════════════════════════════════════════"
-          echo "✓ All 7 release gates passed for v${{ steps.version.outputs.version }}"
+          echo "✓ Release gates passed for v${{ steps.version.outputs.version }}"
+          echo "  (semver/Cargo.toml/Chart.yaml, cargo audit, and helm lint"
+          echo "   are enforced by release.yml / ci.yml — not duplicated here)"
           echo "══════════════════════════════════════════════"
           echo "The release.yml workflow may now proceed."

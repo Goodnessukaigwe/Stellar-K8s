@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Comprehensive CLI argument parser tests for all subcommands (Issue #594).
 //!
 //! Covers: defaults, flag parsing, required args, optional args, enum values,
@@ -378,7 +390,7 @@ mod tests {
         );
         assert!(matches!(
             a.format,
-            stellar_k8s::controller::diff::DiffFormat::Json
+            crate::controller::diff::DiffFormat::Json
         ));
     }
 
@@ -397,7 +409,7 @@ mod tests {
         );
         assert!(matches!(
             a.format,
-            stellar_k8s::controller::diff::DiffFormat::Unified
+            crate::controller::diff::DiffFormat::Unified
         ));
     }
 
@@ -535,13 +547,13 @@ mod tests {
 
     // ── IncidentReport ────────────────────────────────────────────────────────
 
-    fn parse_incident_report(args: &[&str]) -> stellar_k8s::incident::IncidentReportArgs {
+    fn parse_incident_report(args: &[&str]) -> crate::incident::IncidentReportArgs {
         let mut full: Vec<&str> = vec!["stellar-operator", "incident", "report"];
         full.extend_from_slice(args);
         let parsed = Args::try_parse_from(full).unwrap();
         match parsed.command {
             Commands::Incident {
-                command: stellar_k8s::incident::IncidentCommands::Report(r),
+                command: crate::incident::IncidentCommands::Report(r),
             } => r,
             _ => panic!("expected Incident Report subcommand"),
         }

@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! StellarNode Custom Resource Definition
 //!
 //! The StellarNode CRD represents a managed Stellar infrastructure node.
@@ -187,7 +199,8 @@ pub struct StellarNodeSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cross_cluster: Option<CrossClusterConfig>,
 
-    /// Rollout strategy for updates (RollingUpdate or Canary)
+    /// Rollout strategy for updates (RollingUpdate, Canary, or BlueGreen).
+    /// Validators support RollingUpdate and BlueGreen; Canary is rejected.
     #[serde(default)]
     pub strategy: RolloutStrategy,
 
@@ -843,12 +856,16 @@ impl StellarNodeSpec {
                         "Remove spec.ingress for Validator nodes; expose Validator nodes using peer discovery or other supported mechanisms.",
                     ));
                 }
-                // Canary strategy not supported
-                if self.strategy.canary().is_some() {
+                // Canary strategy not supported for Validators (BlueGreen is allowed).
+                if matches!(
+                    self.strategy.strategy_type,
+                    crate::crd::types::RolloutStrategyType::Canary
+                ) || self.strategy.canary().is_some()
+                {
                     errors.push(SpecValidationError::new(
                         "spec.strategy",
                         "canary rollout strategy is not supported for Validator nodes",
-                        "Use RollingUpdate strategy for Validator nodes; canary is only supported for Horizon and SorobanRpc.",
+                        "Use RollingUpdate or BlueGreen for Validator nodes; canary is only supported for Horizon and SorobanRpc.",
                     ));
                 }
 
@@ -1663,6 +1680,26 @@ pub struct StellarNodeStatus {
     /// Timestamp of the last secret rotation (RFC3339).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_secret_rotation_time: Option<String>,
+
+    /// Validator blue/green rollout phase (e.g. `BlueActive`, `WaitingForGreen`, `GreenActive`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blue_green_phase: Option<String>,
+
+    /// Active deployment color for Validator blue/green (`blue` or `green`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blue_green_active_color: Option<String>,
+
+    /// Human-readable message for the current Validator blue/green rollout.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blue_green_message: Option<String>,
+
+    /// Target Core version for an in-progress Validator blue/green rollout.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blue_green_target_version: Option<String>,
+
+    /// VolumeSnapshot used to seed the green Validator PVC (if any).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blue_green_snapshot_name: Option<String>,
 }
 
 /// BGP advertisement status information
@@ -1884,6 +1921,49 @@ mod tests {
                     check_interval_seconds: 300,
                     ..Default::default()
                 }),
+                blue_green: None,
+            },
+            ..Default::default()
+        };
+
+        assert!(spec.validate().is_err());
+    }
+
+    #[test]
+    fn test_validator_with_blue_green_should_pass() {
+        let spec = StellarNodeSpec {
+            node_type: NodeType::Validator,
+            network: StellarNetwork::Testnet,
+            version: "v21.0.0".to_string(),
+            validator_config: Some(ValidatorConfig {
+                seed_secret_ref: "test".to_string(),
+                ..Default::default()
+            }),
+            strategy: RolloutStrategy {
+                strategy_type: crate::crd::types::RolloutStrategyType::BlueGreen,
+                canary: None,
+                blue_green: Some(crate::crd::types::BlueGreenStrategyConfig::default()),
+            },
+            ..Default::default()
+        };
+
+        assert!(spec.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validator_canary_type_without_config_should_fail() {
+        let spec = StellarNodeSpec {
+            node_type: NodeType::Validator,
+            network: StellarNetwork::Testnet,
+            version: "v21.0.0".to_string(),
+            validator_config: Some(ValidatorConfig {
+                seed_secret_ref: "test".to_string(),
+                ..Default::default()
+            }),
+            strategy: RolloutStrategy {
+                strategy_type: crate::crd::types::RolloutStrategyType::Canary,
+                canary: None,
+                blue_green: None,
             },
             ..Default::default()
         };
@@ -1911,6 +1991,7 @@ mod tests {
                     check_interval_seconds: 300,
                     ..Default::default()
                 }),
+                blue_green: None,
             },
             ..Default::default()
         };

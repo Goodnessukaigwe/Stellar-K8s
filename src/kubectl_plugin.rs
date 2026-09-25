@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! kubectl-stellar: A kubectl plugin for managing Stellar nodes
 //!
 //! This plugin provides convenient commands to interact with StellarNode resources:
@@ -65,7 +77,7 @@ struct Cli {
     dry_run: bool,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     /// Show version information for the plugin and operator
     Version,
@@ -781,7 +793,10 @@ async fn run(cli: Cli) -> Result<()> {
                 } => snapshot_restore(&client, namespace, &snapshot_name, &node_name).await,
             }
         }
-        _ => todo!(),
+        other => {
+            eprintln!("Error: unrecognized stellar command: {:?}", other);
+            std::process::exit(1);
+        }
     }
 }
 
@@ -796,11 +811,6 @@ fn volume_snapshot_api_resource() -> kube::discovery::ApiResource {
     }
 }
 
-/// Helper to build resource name
-fn resource_name_for_node(node_name: &str, suffix: &str) -> String {
-    format!("{}-{}", node_name, suffix)
-}
-
 /// Create a VolumeSnapshot for a StellarNode
 async fn snapshot_create(
     client: &Client,
@@ -812,7 +822,7 @@ async fn snapshot_create(
     let node_api: Api<StellarNode> = Api::namespaced(client.clone(), namespace);
     let _node = node_api.get(node_name).await.map_err(Error::KubeError)?;
 
-    let pvc_name = resource_name_for_node(node_name, "data");
+    let pvc_name = format!("{}-data", node_name);
     let snapshot_name = format!(
         "{}-data-{}",
         node_name,

@@ -12,8 +12,8 @@
   <a href="https://codecov.io/gh/OtowoOrg/Stellar-K8s">
     <img src="https://img.shields.io/codecov/c/github/OtowoOrg/Stellar-K8s/main?style=for-the-badge&logo=codecov" alt="Coverage" />
   </a>
-  <a href="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/security-scan.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/OtowoOrg/Stellar-K8s/security-scan.yml?branch=main&style=for-the-badge&label=Security&logo=trivy" alt="Security Scan" />
+  <a href="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/container-image-security.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/OtowoOrg/Stellar-K8s/container-image-security.yml?branch=main&style=for-the-badge&label=Security&logo=trivy" alt="Security Scan" />
   </a>
 </p>
 
@@ -87,9 +87,10 @@ Stellar-K8s follows the **Operator Pattern**, extending Kubernetes with a `Stell
 - **Kubernetes cluster** (1.28+)
 - **kubectl** configured
 - **Helm 3.x** (for operator installation)
-- **Rust 1.88+** (for local development)
-  - CI/CD and Docker builds use Rust 1.93 for consistency
-  - Contributors can use any Rust 1.88+ version locally
+- **Rust 1.92+** (minimum enforced by CI's `preflight`/`lint` jobs and
+  `scripts/lib/versions.sh` — run `make dev-setup` or
+  `cargo run --bin stellar-bootstrap-verify` to check your local version)
+  - Docker builds (`Dockerfile`, `Dockerfile.dev`) currently use Rust 1.98
 
 > **New to Stellar-K8s?** See the [Glossary](docs/glossary.md) for definitions of common terms like [Validator](docs/glossary.md#validator), [Horizon](docs/glossary.md#horizon), [SCP](docs/glossary.md#scp-stellar-consensus-protocol), and [Reconciliation](docs/glossary.md#reconciliation).
 >
@@ -308,6 +309,8 @@ The operator exposes the following production-readiness metrics:
 
 The operator supports runtime feature flags via the `stellar-operator-config` ConfigMap. Changes are picked up **without restart**.
 
+Dead flags that no longer gated any code paths were removed. Only `enable_dr` remains.
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -315,29 +318,18 @@ metadata:
   name: stellar-operator-config
   namespace: stellar-system
 data:
-  enable_cve_scanning: "true"
-  enable_read_pool: "false"
   enable_dr: "false"
-  enable_peer_discovery: "true"
-  enable_archive_health: "true"
-  enable_soroban_metrics: "true"
 ```
 
-| Flag                     | Default | Description                         |
-| ------------------------ | ------- | ----------------------------------- |
-| `enable_cve_scanning`    | `true`  | Automatic CVE patch reconciliation  |
-| `enable_read_pool`       | `false` | Read-replica pool management        |
-| `enable_dr`              | `false` | Disaster-recovery drill scheduling  |
-| `enable_peer_discovery`  | `true`  | Automatic peer discovery            |
-| `enable_archive_health`  | `true`  | History archive health checks       |
-| `enable_soroban_metrics` | `true`  | Soroban-specific Prometheus metrics |
+| Flag        | Default | Description                                                   |
+| ----------- | ------- | ------------------------------------------------------------- |
+| `enable_dr` | `false` | Disaster-recovery / cross-region bridge resources and drills |
 
 When using the Helm chart, set flags via `values.yaml`:
 
 ```yaml
 featureFlags:
-  enableCveScanning: "true"
-  enableReadPool: "false"
+  enableDr: false
 ```
 
 ---
@@ -622,17 +614,32 @@ The full `StellarNode` CRD field reference — including all fields, types, defa
 
 **[docs/api-reference.md](docs/api-reference.md)**
 
-The reference is auto-generated from the CRD OpenAPI schema. To regenerate after modifying the CRD types:
+The CRD reference is auto-generated from the CRD OpenAPI schema. To regenerate after modifying the CRD types:
 
 ```bash
 make generate-api-docs
 ```
+
+Operator REST endpoints are documented in **[docs/api/openapi.yaml](docs/api/openapi.yaml)** (OpenAPI 3.0). Validate coverage with:
+
+```bash
+make check-openapi-spec
+```
+
+Interactive Swagger UI is available at `/developer` when the API gateway is enabled.
 
 ---
 
 ## 💻 Development
 
 For detailed instructions on setting up a local development environment, building the project, running tests, and managing Kubernetes resources locally, please refer to the **[Development Guide](DEVELOPMENT.md)**.
+
+Reliability and observability:
+
+- [Database migration testing](docs/database/migrations.md)
+- [YAML / CRD schema validation](docs/yaml-schema-validation.md)
+- [Helm chart testing](docs/helm-chart-testing.md)
+- [OpenTelemetry tracing](docs/observability/tracing.md)
 
 ### Reconciler fuzzing
 

@@ -5,7 +5,8 @@ edition = "2021"
 authors = ["Stellar K8s Contributors"]
 description = "Cloud-Native Kubernetes Operator for Stellar Infrastructure"
 license = "Apache-2.0"
-repository = "https://github.com/stellar/stellar-k8s"
+repository = "https://github.com/OtowoOrg/Stellar-K8s"
+autobenches = false
 
 [dependencies]
 ed25519-dalek = { version = "2", features = ["rand_core"] }
@@ -56,17 +57,15 @@ schemars = { version = "0.8", features = ["chrono"] }
 
 # Error handling
 thiserror = "1"
-anyhow = "1.0.103" # Patched for RUSTSEC-2026-0190
-
+anyhow = "1.0.103" # Pinned to Cargo.lock; 1.0.108 was unpublished
 # CLI argument parsing
 clap = { version = "4.5", features = ["derive", "env"] }
 clap_complete = "4.6"
 
 # Date/time handling
 chrono = { version = "0.4", features = ["serde"] }
-# Pinned to fix RUSTSEC-2026-0007; used transitively by many HTTP/async crates.
+# Pinned to latest patch for security fixes; used transitively by many HTTP/async crates.
 bytes = "1.11.1"
-
 # Zip compression for incident reports
 zip = "2"
 
@@ -111,13 +110,19 @@ axum = { version = "0.7.5", optional = true, features = ["ws"] }
 tower = { version = "0.4", optional = true }
 tower-http = { version = "0.5", features = ["trace"], optional = true }
 
+# Optional production profiling (#1330) — not in default features
+pprof = { version = "0.14", default-features = false, features = ["prost-codec"], optional = true }
+prost = { version = "0.12", optional = true }
+tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_malloc_on_supported_platforms"], optional = true }
+jemalloc_pprof = { version = "0.8", optional = true }
+
 # Metrics
 prometheus-client = { version = "0.22", optional = true }
 once_cell = { version = "1", optional = true }
 
 # TLS and certificate generation
-rustls = "0.23"
-rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rcgen = { version = "0.14", features = ["pem", "x509-parser"] }
 axum-server = { version = "0.7.0", features = ["tls-rustls"] }
 rustls-pki-types = "1.14.1"
 x509-parser = "0.16"
@@ -138,12 +143,14 @@ hmac = "0.12"
 # SHA256 for plugin integrity verification
 sha2 = "0.10"
 hex = "0.4"
-rand = "0.8"
+rand = { version = "0.8", features = ["small_rng"] }
 
 # Backup scheduler dependencies
 cron = "0.15"
 tar = "0.4"
 flate2 = "1"
+# Used unconditionally by backup-verify's restore integrity check, not just tests
+tempfile = "3"
 async-trait = "0.1"
 sqlx = { version = "0.8.6", default-features = false, features = [
     "runtime-tokio",
@@ -158,6 +165,7 @@ aws-sdk-s3 = "1.132.0"
 aws-config = "1.8.17"
 json-patch = "4.2.0"
 md5 = "0.8.0"
+uuid = { version = "1.26.0", features = ["v4"] }
 
 [build-dependencies]
 chrono = "0.4"
@@ -179,6 +187,15 @@ admission-webhook = [
     "dep:tower",
     "dep:tower-http",
 ]
+# CPU (pprof) + heap (jemalloc) profiling HTTP endpoints for the operator REST API (#1330).
+# Off by default. Requires REST_API_PROFILING_ENABLED=true at runtime to register routes.
+profiling = [
+    "rest-api",
+    "dep:pprof",
+    "dep:prost",
+    "dep:tikv-jemallocator",
+    "dep:jemalloc_pprof",
+]
 # Expose reconciler for state-machine fuzzing (reconcile_no_panic, event sequences)
 reconciler-fuzz = []
 
@@ -187,26 +204,48 @@ k8s-v1-30 = ["k8s-openapi/v1_30"]
 
 [dev-dependencies]
 tokio-test = "0.4"
-tempfile = "3"
 wiremock = "=0.6.5"
 proptest = "1.5"
 wat = "1.251"
+# CLI smoke test dependencies
+assert_cmd = "2"
+predicates = "3"
+# API contract testing dependencies (#1396)
+serde_yaml = "0.9"
 # Ensure dev builds that pull k8s-openapi 0.22 have an explicit API version feature.
 k8s-openapi = { version = "0.22", default-features = false, features = [
     "v1_30",
 ] }
+# CRD validation micro-benchmarks (benches/crd_operations.rs, #1390)
+criterion = "0.5"
 
 [[bin]]
 name = "stellar-scaffold"
 path = "src/bin/stellar-scaffold.rs"
+
+# crdgen and stellar-log-shipper were previously auto-discovered from src/bin/
+# and listed as orphans by check-unreachable-modules. Both are load-bearing
+# (make crd-gen / ci.yml use crdgen; the operator injects the
+# stellar-log-shipper sidecar), so they are declared here explicitly.
+[[bin]]
+name = "crdgen"
+path = "src/bin/crdgen.rs"
+
+[[bin]]
+name = "stellar-log-shipper"
+path = "src/bin/stellar-log-shipper.rs"
 
 [[bin]]
 name = "stellar-operator"
 path = "src/main.rs"
 
 [[bin]]
-name = "doc-check"
-path = "src/bin/doc_check.rs"
+name = "check-unreachable-modules"
+path = "src/bin/check_unreachable_modules.rs"
+
+[[bin]]
+name = "check-pipeline-log-redaction"
+path = "src/bin/check_pipeline_log_redaction.rs"
 
 [[bin]]
 name = "stellar-sidecar"
@@ -219,6 +258,20 @@ path = "src/kubectl_plugin.rs"
 [[bin]]
 name = "stellar-completions"
 path = "src/bin/completions.rs"
+
+[[bin]]
+name = "conventional-commit-check"
+path = "src/bin/conventional-commit-check.rs"
+
+[[bin]]
+name = "backup-verify"
+path = "src/bin/backup-verify.rs"
+
+# Lifecycle hooks runner — installed into workload pods to run ordered
+# setup / readiness / teardown hooks (#1525).
+[[bin]]
+name = "stellar-hooks"
+path = "src/bin/stellar-hooks.rs"
 
 # Cross-platform developer bootstrap verifier — pure Rust so it also runs on
 # plain Windows (no WSL/Git Bash needed), unlike scripts/preflight.sh.
@@ -247,4 +300,35 @@ name = "stellar-health-sidecar"
 path = "src/bin/stellar-health-sidecar.rs"
 required-features = ["rest-api"]
 
+[[bench]]
+name = "crd_operations"
+harness = false
+
 [workspace]
+
+# Security-hardened release profile
+[profile.release]
+# Remove debug symbols to reduce binary size and attack surface
+strip = true
+# Don't unwind on panic - abort immediately for security
+panic = "abort"  
+# Single codegen unit for better optimization
+codegen-units = 1
+# Enable link-time optimization for better security and performance
+lto = true
+# Optimize for performance while maintaining security
+opt-level = 3
+
+# Security-hardened profile for production deployments
+[profile.production]
+inherits = "release" 
+# Maximum optimization for production
+opt-level = 3
+# Aggressive dead code elimination
+lto = "fat"
+# Abort on panic in production
+panic = "abort"
+# Strip all symbols
+strip = "symbols"
+# Single codegen unit for maximum optimization
+codegen-units = 1

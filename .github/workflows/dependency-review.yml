@@ -1,10 +1,11 @@
 name: Dependency & License Review
 
-# Automatically detects stale dependencies, license drift, and security
-# advisories on every push/PR that touches Cargo files, and on a weekly
-# schedule so that newly published advisories are caught promptly.
+# Unique dependency-review gates (stale deps, lockfile diff, license inventory,
+# cargo-deny on dep changes). cargo-audit is intentionally NOT duplicated here:
+#   - PR/push:  ci.yml `security-audit`
+#   - Schedule: security-audit.yml
 #
-# Addresses GitHub Issue #1119.
+# Addresses GitHub Issue #1119; deduplicated in #1219.
 
 on:
   push:
@@ -21,9 +22,6 @@ on:
       - "Cargo.lock"
       - "deny.toml"
       - ".cargo/audit.toml"
-  schedule:
-    # Run weekly on Mondays at 08:00 UTC to catch newly published advisories.
-    - cron: "0 8 * * 1"
   workflow_dispatch:
     inputs:
       full_check:
@@ -43,102 +41,43 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ── 1. cargo audit — known vulnerabilities ──────────────────────────────────
-  cargo-audit:
-    name: Cargo Audit (Vulnerabilities)
+  # ── 1. cargo deny — license + bans + advisories ─────────────────────────────
+  cargo-deny:
+    name: Cargo Deny (Licenses + Bans)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          cache-key: "dep-audit"
+          cache-key: "ci-deny"
+          extra-tools: "cargo-deny"
 
-      - name: Install cargo-audit
-        run: cargo install --locked cargo-audit
-
-      - name: Run cargo audit
+      - name: Run cargo deny check
         run: |
-          echo "── Security advisory audit ──────────────────────────────────────"
-          cargo audit \
-            --ignore RUSTSEC-2020-0071 \
-            --ignore RUSTSEC-2024-0380 \
-            --ignore RUSTSEC-2024-0381 \
-            --ignore RUSTSEC-2026-0085 \
-            --ignore RUSTSEC-2026-0086 \
-            --ignore RUSTSEC-2026-0087 \
-            --ignore RUSTSEC-2026-0091 \
-            --ignore RUSTSEC-2026-0094 \
-            --ignore RUSTSEC-2026-0097 \
-            --ignore RUSTSEC-2026-0098 \
-            --ignore RUSTSEC-2026-0099 \
-            --ignore RUSTSEC-2026-0104 \
-            --ignore RUSTSEC-2026-0149
-
-      - name: Generate audit JSON report
-        if: always()
-        run: |
-          cargo audit --json 2>/dev/null > audit-report.json || true
-          echo "Audit report saved to audit-report.json"
-
-      - name: Upload audit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-audit-report
-          path: audit-report.json
-          retention-days: 30
-
-  # ── 2. cargo deny — license + bans + advisories ─────────────────────────────
-  cargo-deny:
-    name: Cargo Deny (Licenses + Bans)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install cargo-deny
-        run: cargo install --locked cargo-deny
-
-      - name: Check licenses
-        run: |
-          echo "── License compliance check ─────────────────────────────────────"
-          cargo deny check licenses
-
-      - name: Check bans (forbidden + duplicate crates)
-        run: |
-          echo "── Dependency bans check ────────────────────────────────────────"
-          cargo deny check bans
-
-      - name: Check advisories via deny
-        run: |
-          echo "── Advisory check via cargo-deny ────────────────────────────────"
-          cargo deny check advisories
-
-      - name: Check sources (registry whitelist)
-        run: |
-          echo "── Source registry check ────────────────────────────────────────"
-          cargo deny check sources
+          echo "── Dependency policy check (licenses + bans + advisories + sources) ──"
+          cargo deny check
 
   # ── 3. Stale dependency detection ───────────────────────────────────────────
   stale-deps:
     name: Stale Dependency Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Run on schedule and manual dispatch; also on dep changes
     if: >
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          cache-key: "dep-stale"
-
-      - name: Install cargo-outdated
-        run: cargo install --locked cargo-outdated
+          cache-key: "ci-stale"
+          extra-tools: "cargo-outdated"
 
       - name: Check for outdated dependencies
         id: outdated
@@ -150,7 +89,7 @@ jobs:
           echo "outdated_count=${OUTDATED_COUNT}" >> "$GITHUB_OUTPUT"
 
       - name: Upload outdated report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: outdated-dependencies-report
           path: outdated-report.txt
@@ -165,19 +104,18 @@ jobs:
   dep-diff:
     name: Dependency Diff (PR only)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          cache-key: "dep-diff"
-
-      - name: Install cargo-diff-tree
-        run: cargo install --locked cargo-lock
+          cache-key: "ci-diff"
+          extra-tools: "cargo-lock"
 
       - name: Summarise Cargo.lock changes
         run: |
@@ -190,17 +128,16 @@ jobs:
   license-report:
     name: License Drift Report
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          cache-key: "dep-license"
-
-      - name: Install cargo-license
-        run: cargo install --locked cargo-license
+          cache-key: "ci-license"
+          extra-tools: "cargo-license"
 
       - name: Generate full license inventory
         run: |
@@ -211,7 +148,7 @@ jobs:
           cargo license --all-features 2>/dev/null | sort | uniq -c | sort -rn | head -20
 
       - name: Upload license inventory
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: license-inventory
           path: license-inventory.tsv

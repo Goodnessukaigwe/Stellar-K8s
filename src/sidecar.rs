@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::{Event, ObjectReference, Pod};
@@ -8,16 +20,13 @@ use kube::{
 use serde_json::json;
 use std::env;
 use std::time::Duration;
+use stellar_k8s::logging::{init_binary_subscriber, LogOutputFormat};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn, Level};
-use stellar_k8s::logging::{init_binary_subscriber, LogOutputFormat};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    init_binary_subscriber(
-        Level::INFO,
-        LogOutputFormat::Json,
-    );
+    init_binary_subscriber(Level::INFO, LogOutputFormat::Json);
 
     info!("Starting Stellar-K8s Crash Loop Analysis sidecar");
 
@@ -231,7 +240,15 @@ async fn monitor_ebpf_metrics(events: Api<Event>, pod_name: String, namespace: S
     let mut last_retransmits = 0.0;
 
     loop {
-        if let Ok(resp) = client.get("http://localhost:9435/metrics").send().await {
+        if let Ok(resp) = {
+            let mut headers = reqwest::header::HeaderMap::new();
+            stellar_k8s::telemetry::inject_trace_headers(&mut headers);
+            client
+                .get("http://localhost:9435/metrics")
+                .headers(headers)
+                .send()
+                .await
+        } {
             if let Ok(text) = resp.text().await {
                 let mut current_latency = 0.0;
                 let mut current_retransmits = 0.0;

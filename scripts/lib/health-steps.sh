@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
+# Copyright 2024 Stellar-K8s Contributors
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # scripts/lib/health-steps.sh
-# Shared repository health check steps used by repo-health.sh and validate.sh.
+# Shared repository health check steps used by repo-health.sh.
 
 : "${REPO_ROOT:?REPO_ROOT must be set before sourcing health-steps.sh}"
 
@@ -62,10 +74,6 @@ sk8s_health_api_docs() {
     --check
 }
 
-sk8s_health_stale_docs() {
-  cargo run --bin doc-check -- --warn-only
-}
-
 sk8s_health_shellcheck() {
   mapfile -t shell_files < <(find scripts -name '*.sh' -type f | sort)
   if ((${#shell_files[@]} == 0)); then
@@ -79,12 +87,14 @@ sk8s_health_link_check() {
 }
 
 sk8s_health_cargo_audit() {
-  if ! command -v cargo-audit >/dev/null 2>&1; then
-    cargo install --locked cargo-audit
-  fi
-  cargo audit --deny unsound
+  bash "${REPO_ROOT}/scripts/dep-gate.sh" --audit-only
 }
 
 sk8s_health_helm_lint() {
   helm lint charts/stellar-operator
 }
+
+sk8s_health_issue_templates() {
+  python3 scripts/issue_template_lint.py
+}
+

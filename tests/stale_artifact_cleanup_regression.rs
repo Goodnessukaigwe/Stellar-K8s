@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Regression tests for stale artifact cleanup logic (Issue #978).
 
 use chrono::Utc;
@@ -99,7 +111,7 @@ mod stale_artifact_cleanup_regression {
         let mut p = policy(30);
         p.enabled = false;
         p.schedule = Some("* * * * * *".to_string()); // every second
-        // disabled policies skip validation, so construct directly
+                                                      // disabled policies skip validation, so construct directly
         let worker = PruningWorker::new(PruningPolicy {
             enabled: false,
             ..PruningPolicy::default()
@@ -119,7 +131,8 @@ mod stale_artifact_cleanup_regression {
     #[test]
     fn enabled_policy_with_no_last_run_triggers() {
         let mut p = policy(30);
-        p.schedule = Some("0 0 * * *".to_string()); // daily at midnight
+        // cron crate expects seconds field (6-field expressions).
+        p.schedule = Some("0 0 0 * * *".to_string()); // daily at midnight
         let worker = PruningWorker::new(p).unwrap();
         // No last run recorded → should trigger immediately
         assert!(worker.should_run_scheduled(None));

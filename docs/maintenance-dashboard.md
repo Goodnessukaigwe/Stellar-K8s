@@ -25,7 +25,7 @@ running smoothly.
 
 - [ ] Review open PRs and triage new issues
 - [ ] Check `cargo audit` for new advisories: `make audit`
-- [ ] Review Dependabot PRs (`.github/dependabot.yml`)
+- [ ] Review Dependabot PRs using the [dependency update process](security/dependency-updates.md) (config: `.github/dependabot.yml`)
 - [ ] Verify CI is green on `main`
 
 ### Monthly
@@ -33,7 +33,7 @@ running smoothly.
 - [ ] Update Rust toolchain pin in CI (`1.9x` in `.github/actions/setup-rust`)
 - [ ] Update `stellar-core` / `horizon` / `soroban-rpc` version defaults in samples
 - [ ] Rotate any expiring tokens (Codecov, GHCR)
-- [ ] Review and merge Dependabot dependency updates
+- [ ] Review and merge Dependabot dependency updates per [dependency-updates.md](security/dependency-updates.md) (CI must be green)
 - [ ] Run `make ci-local` and confirm clean
 - [ ] Review open issues for stale labels
 

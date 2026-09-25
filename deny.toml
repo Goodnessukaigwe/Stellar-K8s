@@ -2,6 +2,7 @@
 # Enforces license compliance and detects banned/duplicate crates.
 # Run locally: cargo deny check
 # CI: .github/workflows/dependency-review.yml
+# Compatible with cargo-deny >= 0.20 (deprecated lint keys removed).
 
 [graph]
 # Only audit for the default feature set used in production builds.
@@ -23,27 +24,18 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "CC0-1.0",
     "MPL-2.0",       # Mozilla Public License 2.0 — file-level copyleft, acceptable
     "Zlib",
     "OpenSSL",
 ]
 
-# Treat any crate with an UNLICENSED or unknown license as an error.
-unlicensed = "deny"
-
-# Warn (not fail) on copyleft licenses that are NOT in the deny list.
-copyleft = "warn"
-
-# Allow the standard Rust dual MIT/Apache-2.0 SPDX expression used by
-# virtually every crate in the ecosystem.
-allow-osi-fsf-free = "neither"
-
 # Exceptions for specific crates that use uncommon-but-acceptable licenses.
 exceptions = [
     # unicode-ident uses Unicode-DFS-2016 which is not a standard SPDX ID in
     # older cargo-deny versions; treat it as allowed.
-    { allow = ["Unicode-DFS-2016"], name = "unicode-ident" },
+    { allow = ["Unicode-DFS-2016"], crate = "unicode-ident" },
 ]
 
 # ── Bans — forbidden and duplicate crates ─────────────────────────────────────
@@ -51,12 +43,12 @@ exceptions = [
 # Deny multiple versions of the same crate (can cause binary bloat and subtle bugs).
 multiple-versions = "warn"
 
-# Completely deny these crates — they must not appear anywhere in the dependency tree.
+# Completely deny these crates — they must not appear anywhere in the dependency tree
+# unless pulled exclusively through an approved wrapper.
 deny = [
-    # openssl — use rustls instead; openssl introduces C compilation dependencies
-    # and historically has had many CVEs.
-    { name = "openssl" },
-    { name = "openssl-sys" },
+    # openssl — prefer rustls; still appears transitively via reqwest's native-tls feature.
+    { crate = "openssl", wrappers = ["native-tls"], reason = "reqwest enables native-tls alongside rustls-tls-manual-roots" },
+    { crate = "openssl-sys", wrappers = ["openssl", "native-tls"], reason = "sys crate for openssl/native-tls via reqwest" },
 ]
 
 # Allow specific version duplicates that are unavoidable due to ecosystem lag.
@@ -64,9 +56,9 @@ deny = [
 skip = [
     # syn 1.x vs 2.x — many macro crates still use 1.x; expected to resolve
     # over time as the ecosystem migrates.
-    { name = "syn", reason = "macro ecosystem migration from syn 1.x to 2.x is in progress" },
+    { crate = "syn", reason = "macro ecosystem migration from syn 1.x to 2.x is in progress" },
     # tokio-util — kube-rs and some networking crates pin different minor versions.
-    { name = "tokio-util", reason = "transitive version split between kube-rs and axum; no actionable fix" },
+    { crate = "tokio-util", reason = "transitive version split between kube-rs and axum; no actionable fix" },
 ]
 
 # ── Advisories — security vulnerability policy ────────────────────────────────
@@ -75,12 +67,9 @@ skip = [
 db-urls = ["https://github.com/rustsec/advisory-db"]
 db-path = "~/.cargo/advisory-db"
 
-# Deny any advisory that is not explicitly ignored below.
-vulnerability = "deny"
-unmaintained = "warn"
-unsound = "warn"
-yanked = "warn"
-notice = "warn"
+# cargo-deny >=0.18: unmaintained/unsound are scopes (all|workspace|transitive|none).
+unmaintained = "workspace"
+unsound = "workspace"
 
 # Ignored advisories — all entries MUST have a documented reason and a
 # re-evaluation target date or upstream issue link.
@@ -122,6 +111,12 @@ ignore = [
     # pqcrypto — experimental KMS path only, behind a feature flag
     { id = "RUSTSEC-2024-0380", reason = "experimental pqcrypto KMS path, not in production" },
     { id = "RUSTSEC-2024-0381", reason = "experimental pqcrypto KMS path, not in production" },
+
+    # Keep in sync with .github/workflows cargo-audit --ignore lists
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki name constraints; awaiting coordinated upgrade" },
+    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki wildcard name constraints; awaiting coordinated upgrade" },
+    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL parsing panic; awaiting coordinated upgrade" },
+    { id = "RUSTSEC-2026-0187", reason = "lopdf stack overflow; transitive, not on operator hot path" },
 ]
 
 # ── Sources — only allow crates from trusted registries ───────────────────────

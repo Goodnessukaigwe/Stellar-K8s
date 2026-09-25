@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Unit tests for Kubernetes resource builders.
 //!
 //! Run with: `cargo test -p stellar-k8s resources_test`
@@ -391,8 +403,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     use crate::controller::resources::{
-        build_config_map_for_test, build_deployment_for_test, build_network_policy,
-        build_pvc_for_test, build_service_for_test, build_statefulset_for_test,
+        build_deployment, build_network_policy, build_service, build_statefulset,
         merge_workload_affinity, owner_reference, standard_labels,
     };
     use crate::crd::types::ValidatorConfig;
@@ -540,7 +551,7 @@ peer-2 = "G..."
     #[test]
     fn test_deployment_has_standard_labels_and_owner_ref() {
         let node = make_node(NodeType::Horizon);
-        let deploy = build_deployment_for_test(&node);
+        let deploy = build_deployment(&node, false);
         assert_standard_labels(&deploy.metadata, &node);
         assert_owner_reference(&deploy.metadata, &node);
     }
@@ -558,7 +569,7 @@ peer-2 = "G..."
             auto_migration: true,
         });
 
-        let deploy = build_deployment_for_test(&node);
+        let deploy = build_deployment(&node, false);
         let spec = deploy.spec.as_ref().expect("deployment spec must exist");
         let selector_labels = spec
             .selector
@@ -593,9 +604,36 @@ peer-2 = "G..."
     }
 
     #[test]
+    fn test_validator_blue_green_service_selects_active_color() {
+        let mut node = make_node(NodeType::Validator);
+        node.spec.strategy.strategy_type = crate::crd::types::RolloutStrategyType::BlueGreen;
+        node.status = Some(crate::crd::StellarNodeStatus {
+            blue_green_active_color: Some("green".to_string()),
+            ..Default::default()
+        });
+
+        let svc = build_service(&node, false);
+        let selector = svc
+            .spec
+            .as_ref()
+            .and_then(|s| s.selector.as_ref())
+            .expect("service selector");
+        assert_eq!(
+            selector
+                .get("stellar.org/deployment-color")
+                .map(String::as_str),
+            Some("green")
+        );
+        assert_eq!(
+            selector.get("stellar.org/bg-role").map(String::as_str),
+            Some("active")
+        );
+    }
+
+    #[test]
     fn test_statefulset_has_standard_labels_and_owner_ref() {
         let node = make_node(NodeType::Validator);
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         assert_standard_labels(&sts.metadata, &node);
         assert_owner_reference(&sts.metadata, &node);
     }
@@ -603,7 +641,7 @@ peer-2 = "G..."
     #[test]
     fn test_service_has_standard_labels_and_owner_ref() {
         let node = make_node(NodeType::Horizon);
-        let svc = build_service_for_test(&node);
+        let svc = build_service(&node, false);
         assert_standard_labels(&svc.metadata, &node);
         assert_owner_reference(&svc.metadata, &node);
     }
@@ -623,7 +661,7 @@ peer-2 = "G..."
             "${name}-service".to_string(),
         )]));
 
-        let svc = build_service_for_test(&node);
+        let svc = build_service(&node, false);
         let labels = svc.metadata.labels.as_ref().expect("labels must exist");
         assert_eq!(labels.get("team"), Some(&"infra".to_string()));
         assert_eq!(
@@ -659,7 +697,7 @@ peer-2 = "G..."
             ..Default::default()
         }]);
 
-        let deploy = build_deployment_for_test(&node);
+        let deploy = build_deployment(&node, false);
         let pod_spec = deploy
             .spec
             .as_ref()
@@ -757,7 +795,7 @@ peer-2 = "G..."
         let mut node = make_node(NodeType::Validator);
         node.spec.sidecars = Some(vec![make_sidecar("log-forwarder")]);
 
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let containers = sts.spec.unwrap().template.spec.unwrap().containers;
 
         assert!(
@@ -771,7 +809,7 @@ peer-2 = "G..."
         let mut node = make_node(NodeType::Horizon);
         node.spec.sidecars = Some(vec![make_sidecar("metrics-proxy")]);
 
-        let deploy = build_deployment_for_test(&node);
+        let deploy = build_deployment(&node, false);
         let containers = deploy.spec.unwrap().template.spec.unwrap().containers;
 
         assert!(
@@ -789,7 +827,7 @@ peer-2 = "G..."
             make_sidecar("custom-proxy"),
         ]);
 
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let containers = sts.spec.unwrap().template.spec.unwrap().containers;
 
         for name in &["log-forwarder", "metrics-proxy", "custom-proxy"] {
@@ -805,7 +843,7 @@ peer-2 = "G..."
         let node = make_node(NodeType::Validator);
         // sidecars is None by default in minimal_spec
 
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let containers = sts.spec.unwrap().template.spec.unwrap().containers;
 
         // Main container plus operator-managed health-check sidecar
@@ -827,7 +865,7 @@ peer-2 = "G..."
             "/stellar-data",
         )]);
 
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let pod_spec = sts.spec.unwrap().template.spec.unwrap();
 
         // The "data" volume must exist in the pod spec
@@ -863,7 +901,7 @@ peer-2 = "G..."
             "/stellar-config",
         )]);
 
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let pod_spec = sts.spec.unwrap().template.spec.unwrap();
 
         let volumes = pod_spec.volumes.expect("pod spec must have volumes");
@@ -894,7 +932,7 @@ peer-2 = "G..."
         let mut node = make_node(NodeType::Validator);
         node.spec.sidecars = Some(vec![make_sidecar("log-forwarder")]);
 
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let containers = sts.spec.unwrap().template.spec.unwrap().containers;
 
         assert_eq!(
@@ -1118,7 +1156,7 @@ fn test_probe_config_validation_accepts_valid_config() {
 mod init_containers_tests {
     use k8s_openapi::api::core::v1::Container;
 
-    use crate::controller::resources::{build_deployment_for_test, build_statefulset_for_test};
+    use crate::controller::resources::{build_deployment, build_statefulset};
     use crate::crd::{
         types::{ResourceRequirements, ResourceSpec, ValidatorConfig},
         NodeType, StellarNetwork, StellarNodeSpec,
@@ -1179,7 +1217,7 @@ mod init_containers_tests {
     #[test]
     fn test_no_user_init_containers_validator() {
         let node = make_node(NodeType::Validator, None);
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let init_containers = sts
             .spec
             .unwrap()
@@ -1199,7 +1237,7 @@ mod init_containers_tests {
     fn test_single_user_init_container_appended_to_statefulset() {
         let user_init = make_init_container("fetch-config");
         let node = make_node(NodeType::Validator, Some(vec![user_init]));
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let init_containers = sts
             .spec
             .unwrap()
@@ -1224,7 +1262,7 @@ mod init_containers_tests {
             make_init_container("step-two"),
         ];
         let node = make_node(NodeType::Validator, Some(containers));
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let init_containers = sts
             .spec
             .unwrap()
@@ -1244,7 +1282,7 @@ mod init_containers_tests {
         let mut container = make_init_container("restore-state");
         container.image = Some("my-registry/restore:v1.2.3".to_string());
         let node = make_node(NodeType::Validator, Some(vec![container]));
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let init_containers = sts
             .spec
             .unwrap()
@@ -1271,7 +1309,7 @@ mod init_containers_tests {
     fn test_single_user_init_container_appended_to_deployment() {
         let user_init = make_init_container("preflight-check");
         let node = make_node(NodeType::Horizon, Some(vec![user_init]));
-        let dep = build_deployment_for_test(&node);
+        let dep = build_deployment(&node, false);
         let init_containers = dep
             .spec
             .unwrap()
@@ -1292,7 +1330,7 @@ mod init_containers_tests {
     #[test]
     fn test_no_user_init_containers_deployment() {
         let node = make_node(NodeType::Horizon, None);
-        let dep = build_deployment_for_test(&node);
+        let dep = build_deployment(&node, false);
         let init_containers = dep
             .spec
             .unwrap()
@@ -1317,7 +1355,7 @@ mod init_containers_tests {
             make_init_container("third"),
         ];
         let node = make_node(NodeType::Horizon, Some(containers));
-        let dep = build_deployment_for_test(&node);
+        let dep = build_deployment(&node, false);
         let init_containers = dep
             .spec
             .unwrap()
@@ -1373,7 +1411,7 @@ mod init_containers_tests {
         let mut node = crate::crd::StellarNode::new("test-node", spec);
         node.metadata.namespace = Some("default".to_string());
 
-        let dep = build_deployment_for_test(&node);
+        let dep = build_deployment(&node, false);
         let init_containers = dep
             .spec
             .unwrap()
@@ -1410,7 +1448,7 @@ mod init_containers_tests {
 mod diagnostic_sidecar_resource_tests {
     use k8s_openapi::api::core::v1::Container;
 
-    use crate::controller::resources::{build_deployment_for_test, build_statefulset_for_test};
+    use crate::controller::resources::{build_deployment, build_statefulset};
     use crate::crd::{
         types::{ResourceRequirements, ResourceSpec, ValidatorConfig},
         NodeType, StellarNetwork, StellarNode, StellarNodeSpec,
@@ -1458,7 +1496,7 @@ mod diagnostic_sidecar_resource_tests {
     #[test]
     fn applies_default_diagnostic_sidecar_resources_to_statefulset() {
         let node = make_node(NodeType::Validator);
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let pod_spec = sts.spec.unwrap().template.spec.unwrap();
         let resources = health_sidecar(&pod_spec.containers)
             .resources
@@ -1488,7 +1526,7 @@ mod diagnostic_sidecar_resource_tests {
             },
         });
 
-        let deployment = build_deployment_for_test(&node);
+        let deployment = build_deployment(&node, false);
         let pod_spec = deployment.spec.unwrap().template.spec.unwrap();
         let resources = health_sidecar(&pod_spec.containers)
             .resources
@@ -1511,7 +1549,7 @@ mod diagnostic_sidecar_resource_tests {
 
 #[cfg(test)]
 mod advanced_probe_tests {
-    use crate::controller::resources::build_statefulset_for_test;
+    use crate::controller::resources::build_statefulset;
     use crate::crd::{
         types::{ResourceRequirements, ResourceSpec},
         NodeType, StellarNetwork, StellarNode, StellarNodeSpec,
@@ -1551,7 +1589,7 @@ mod advanced_probe_tests {
     #[test]
     fn test_validator_liveness_probe_is_tcp_socket() {
         let node = validator_node("v-liveness");
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let containers = sts.spec.unwrap().template.spec.unwrap().containers;
         let container = containers
             .iter()
@@ -1579,7 +1617,7 @@ mod advanced_probe_tests {
     #[test]
     fn test_validator_readiness_probe_is_exec_checking_info() {
         let node = validator_node("v-readiness");
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let containers = sts.spec.unwrap().template.spec.unwrap().containers;
         let container = containers
             .iter()
@@ -1607,7 +1645,7 @@ mod advanced_probe_tests {
     #[test]
     fn test_readiness_script_rejects_catching_up_state() {
         let node = validator_node("v-sync-check");
-        let sts = build_statefulset_for_test(&node);
+        let sts = build_statefulset(&node, false, None);
         let containers = sts.spec.unwrap().template.spec.unwrap().containers;
         let health_sidecar = containers
             .iter()
@@ -1633,7 +1671,7 @@ mod advanced_probe_tests {
 
 #[cfg(test)]
 mod pdb_tests {
-    use crate::controller::resources::build_pdb_for_test;
+    use crate::controller::resources::build_pdb;
     use crate::crd::{
         types::{ResourceRequirements, ResourceSpec},
         NodeType, StellarNetwork, StellarNode, StellarNodeSpec,
@@ -1674,7 +1712,7 @@ mod pdb_tests {
     #[test]
     fn test_validator_pdb_replicas_1_min_available_1() {
         let node = node_with_replicas(NodeType::Validator, 1);
-        let pdb = build_pdb_for_test(&node).expect("PDB must be generated for Validator");
+        let pdb = build_pdb(&node).expect("PDB must be generated for Validator");
         let spec = pdb.spec.unwrap();
         assert_eq!(
             spec.min_available,
@@ -1688,7 +1726,7 @@ mod pdb_tests {
     #[test]
     fn test_validator_pdb_replicas_3_min_available_2() {
         let node = node_with_replicas(NodeType::Validator, 3);
-        let pdb = build_pdb_for_test(&node).expect("PDB must be generated for Validator");
+        let pdb = build_pdb(&node).expect("PDB must be generated for Validator");
         let spec = pdb.spec.unwrap();
         assert_eq!(
             spec.min_available,
@@ -1701,7 +1739,7 @@ mod pdb_tests {
     #[test]
     fn test_validator_pdb_replicas_5_min_available_3() {
         let node = node_with_replicas(NodeType::Validator, 5);
-        let pdb = build_pdb_for_test(&node).expect("PDB must be generated for Validator");
+        let pdb = build_pdb(&node).expect("PDB must be generated for Validator");
         let spec = pdb.spec.unwrap();
         assert_eq!(spec.min_available, Some(IntOrString::Int(3)));
     }
@@ -1710,7 +1748,7 @@ mod pdb_tests {
     #[test]
     fn test_validator_pdb_has_owner_reference() {
         let node = node_with_replicas(NodeType::Validator, 3);
-        let pdb = build_pdb_for_test(&node).expect("PDB must be generated");
+        let pdb = build_pdb(&node).expect("PDB must be generated");
         let owners = pdb.metadata.owner_references.expect("must have owner refs");
         assert_eq!(owners.len(), 1);
         assert_eq!(owners[0].name, "test-node");
@@ -1721,7 +1759,7 @@ mod pdb_tests {
     fn test_non_validator_single_replica_no_pdb() {
         let node = node_with_replicas(NodeType::Horizon, 1);
         assert!(
-            build_pdb_for_test(&node).is_none(),
+            build_pdb(&node).is_none(),
             "single-replica Horizon must not get a PDB"
         );
     }
@@ -1730,8 +1768,7 @@ mod pdb_tests {
     #[test]
     fn test_non_validator_multi_replica_default_pdb() {
         let node = node_with_replicas(NodeType::Horizon, 3);
-        let pdb =
-            build_pdb_for_test(&node).expect("PDB must be generated for multi-replica Horizon");
+        let pdb = build_pdb(&node).expect("PDB must be generated for multi-replica Horizon");
         let spec = pdb.spec.unwrap();
         assert_eq!(spec.max_unavailable, Some(IntOrString::Int(1)));
         assert!(spec.min_available.is_none());
@@ -1781,7 +1818,7 @@ fn test_validator_custom_env_overrides_defaults() {
 
     let mut node = crate::crd::StellarNode::new("test", spec);
     node.metadata.namespace = Some("default".to_string());
-    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let sts = crate::controller::resources::build_statefulset(&node, false, None);
     let container = sts
         .spec
         .unwrap()
@@ -1843,7 +1880,7 @@ fn test_horizon_custom_env_injected() {
 
     let mut node = crate::crd::StellarNode::new("test", spec);
     node.metadata.namespace = Some("default".to_string());
-    let dep = crate::controller::resources::build_deployment_for_test(&node);
+    let dep = crate::controller::resources::build_deployment(&node, false);
     let container = dep
         .spec
         .unwrap()
@@ -1918,7 +1955,7 @@ fn test_spec_and_jurisdiction_tolerations_are_applied() {
 
     let mut node = crate::crd::StellarNode::new("test", spec);
     node.metadata.namespace = Some("default".to_string());
-    let sts = crate::controller::resources::build_statefulset_for_test(&node);
+    let sts = crate::controller::resources::build_statefulset(&node, false, None);
     let pod_spec = sts.spec.unwrap().template.spec.unwrap();
     let tolerations = pod_spec.tolerations.unwrap_or_default();
 

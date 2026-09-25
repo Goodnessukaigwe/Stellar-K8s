@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Shared types for Stellar node specifications
 //!
 //! These types are used across the CRD definitions and controller logic.
@@ -1311,6 +1323,10 @@ pub struct RolloutStrategy {
     pub strategy_type: RolloutStrategyType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canary: Option<CanaryConfig>,
+    /// Blue/green settings for Validator (Stellar Core) rollouts.
+    /// Ignored for Horizon/SorobanRpc (those use the Horizon migration path).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blue_green: Option<BlueGreenStrategyConfig>,
 }
 
 impl RolloutStrategy {
@@ -1321,6 +1337,86 @@ impl RolloutStrategy {
             None
         }
     }
+
+    pub fn blue_green(&self) -> Option<&BlueGreenStrategyConfig> {
+        if let RolloutStrategyType::BlueGreen = self.strategy_type {
+            self.blue_green.as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Effective blue/green config (defaults when type is BlueGreen but config omitted).
+    pub fn blue_green_or_default(&self) -> BlueGreenStrategyConfig {
+        self.blue_green()
+            .cloned()
+            .unwrap_or_else(BlueGreenStrategyConfig::default)
+    }
+}
+
+/// Configuration for Validator (Stellar Core) blue/green rollouts.
+///
+/// Distinct from Horizon Deployment blue/green: this controls StatefulSet + PVC
+/// isolation, sync/ledger gates, and fail-closed cutover/rollback.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BlueGreenStrategyConfig {
+    /// Maximum allowed ledger lag of green behind blue (or network reference).
+    /// Matches the repository's read-replica freshness default of 5.
+    #[serde(default = "default_bg_max_ledger_lag")]
+    pub max_ledger_lag: u64,
+
+    /// Maximum seconds to wait for green to become sync-eligible before failing closed.
+    #[serde(default = "default_bg_ready_timeout_seconds")]
+    pub ready_timeout_seconds: u32,
+
+    /// Seconds to retain scaled-down blue after successful cutover for instant rollback.
+    #[serde(default = "default_bg_rollback_window_seconds")]
+    pub rollback_window_seconds: u32,
+
+    /// Consecutive successful post-cutover health evaluations before blue may be retired.
+    #[serde(default = "default_bg_post_cutover_success_threshold")]
+    pub post_cutover_success_threshold: u32,
+
+    /// When true (default), green PVC must be provisioned from a CSI VolumeSnapshot of blue.
+    /// When false, green may start from an empty PVC and catch up from history archives.
+    #[serde(default = "default_true")]
+    pub require_volume_snapshot: bool,
+
+    /// Optional VolumeSnapshotClass for the cutover snapshot. If unset, the cluster default is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volume_snapshot_class_name: Option<String>,
+}
+
+impl Default for BlueGreenStrategyConfig {
+    fn default() -> Self {
+        Self {
+            max_ledger_lag: default_bg_max_ledger_lag(),
+            ready_timeout_seconds: default_bg_ready_timeout_seconds(),
+            rollback_window_seconds: default_bg_rollback_window_seconds(),
+            post_cutover_success_threshold: default_bg_post_cutover_success_threshold(),
+            require_volume_snapshot: true,
+            volume_snapshot_class_name: None,
+        }
+    }
+}
+
+fn default_bg_max_ledger_lag() -> u64 {
+    // Same convention as `traffic.rs` freshness threshold for Core ledger lag.
+    5
+}
+
+fn default_bg_ready_timeout_seconds() -> u32 {
+    // Catch-up after snapshot is usually minutes; archive catch-up can be longer.
+    3600
+}
+
+fn default_bg_rollback_window_seconds() -> u32 {
+    3600
+}
+
+fn default_bg_post_cutover_success_threshold() -> u32 {
+    3
 }
 
 /// Configuration for Canary rollout

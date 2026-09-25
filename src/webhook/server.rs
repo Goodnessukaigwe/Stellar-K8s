@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Admission Webhook Server
 //!
 //! This module implements a Kubernetes ValidatingAdmissionWebhook server
@@ -183,7 +195,15 @@ impl WebhookServer {
             return ValidationOutput::allowed();
         };
 
-        let result = self.policy_http.post(endpoint).json(input).send().await;
+        let mut headers = reqwest::header::HeaderMap::new();
+        crate::telemetry::inject_trace_headers(&mut headers);
+        let result = self
+            .policy_http
+            .post(endpoint)
+            .headers(headers)
+            .json(input)
+            .send()
+            .await;
 
         let response = match result {
             Ok(resp) => resp,
@@ -399,14 +419,13 @@ impl WebhookServer {
         }
     }
 
-    /// Start the webhook server
-    pub async fn start(self, addr: SocketAddr) -> Result<()> {
-        // Check TLS config before moving self into Arc
-        let has_tls = self.tls_config.is_some();
-
+    /// Build the HTTP router used by [`Self::start`].
+    ///
+    /// Exposed for hermetic HTTP contract tests (issue #1152) so malformed and
+    /// boundary payloads can be exercised without binding a TCP listener.
+    pub fn into_router(self) -> Router {
         let state = Arc::new(self);
-
-        let app = Router::new()
+        Router::new()
             .route("/health", get(health_handler))
             .route("/healthz", get(health_handler))
             .route("/ready", get(ready_handler))
@@ -421,13 +440,23 @@ impl WebhookServer {
                 "/plugins/{name}",
                 axum::routing::delete(remove_plugin_handler),
             )
-            .with_state(state);
+            .layer(axum::middleware::from_fn(
+                crate::telemetry::http_trace_middleware,
+            ))
+            .with_state(state)
+    }
+
+    /// Start the webhook server
+    pub async fn start(self, addr: SocketAddr) -> Result<()> {
+        // Check TLS config before moving self into the router
+        let has_tls = self.tls_config.is_some();
+        let app = self.into_router();
 
         info!("Starting webhook server on {}", addr);
 
         // Check if TLS is configured
         if has_tls {
-            // TODO: Implement TLS server with rustls
+            // TODO(exempt: pending rustls server): Implement TLS server with rustls
             // For now, fall back to non-TLS
             warn!("TLS configuration provided but not yet implemented, using plain HTTP");
         }
@@ -1479,7 +1508,10 @@ mod tests {
             .map(|_| {
                 let s = server.clone();
                 let o = obj.clone();
-                async move { s.validate(validation_input(Operation::Create, Some(o))).await }
+                async move {
+                    s.validate(validation_input(Operation::Create, Some(o)))
+                        .await
+                }
             })
             .collect();
 
@@ -1505,7 +1537,10 @@ mod tests {
             .map(|_| {
                 let s = server.clone();
                 let o = obj.clone();
-                async move { s.validate(validation_input(Operation::Create, Some(o))).await }
+                async move {
+                    s.validate(validation_input(Operation::Create, Some(o)))
+                        .await
+                }
             })
             .collect();
 
@@ -1540,7 +1575,9 @@ mod tests {
                 let s = server.clone();
                 let o = valid.clone();
                 async move {
-                    let r = s.validate(validation_input(Operation::Create, Some(o))).await;
+                    let r = s
+                        .validate(validation_input(Operation::Create, Some(o)))
+                        .await;
                     ("valid", r.allowed)
                 }
             })
@@ -1551,21 +1588,16 @@ mod tests {
                 let s = server.clone();
                 let o = invalid.clone();
                 async move {
-                    let r = s.validate(validation_input(Operation::Create, Some(o))).await;
+                    let r = s
+                        .validate(validation_input(Operation::Create, Some(o)))
+                        .await;
                     ("invalid", r.allowed)
                 }
             })
             .collect();
 
-        let all_futures: Vec<_> = valid_futures
-            .into_iter()
-            .chain(invalid_futures)
-            .collect();
-
-        let results = futures::future::join_all(all_futures).await;
-
-        let (valid_results, invalid_results): (Vec<_>, Vec<_>) =
-            results.iter().partition(|(tag, _)| *tag == "valid");
+        let valid_results: Vec<_> = futures::future::join_all(valid_futures).await;
+        let invalid_results: Vec<_> = futures::future::join_all(invalid_futures).await;
 
         let valid_denied = valid_results.iter().filter(|(_, ok)| !ok).count();
         let invalid_allowed = invalid_results.iter().filter(|(_, ok)| *ok).count();
@@ -1644,7 +1676,10 @@ mod tests {
             .map(|_| {
                 let s = server.clone();
                 let o = obj.clone();
-                async move { s.validate(validation_input(Operation::Create, Some(o))).await }
+                async move {
+                    s.validate(validation_input(Operation::Create, Some(o)))
+                        .await
+                }
             })
             .collect();
 

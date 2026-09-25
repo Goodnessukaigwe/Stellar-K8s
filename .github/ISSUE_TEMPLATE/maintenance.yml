@@ -9,6 +9,9 @@ body:
         Use this template for maintenance tasks: dependency bumps, CI fixes, doc updates,
         code cleanup, refactors, and other work that does not add features or fix bugs.
 
+        > When opening a PR for this issue, select **Maintenance / hygiene** in the PR
+        > template and fill in the **Maintenance task checklist** section.
+
   - type: dropdown
     id: category
     attributes:
@@ -20,6 +23,7 @@ body:
         - Documentation
         - Code cleanup / refactor
         - Build system / tooling
+        - Configuration drift
         - Repository hygiene
         - Other
     validations:
@@ -46,6 +50,15 @@ body:
       required: true
 
   - type: textarea
+    id: packages
+    attributes:
+      label: Package(s) Affected (dependencies only)
+      description: For dependency updates, list crate(s) or tool(s) with current → target versions. Leave blank otherwise.
+      placeholder: |
+        - `kube` 0.89 → 0.91
+        - `tokio` 1.36 → 1.38
+
+  - type: textarea
     id: acceptance_criteria
     attributes:
       label: Acceptance Criteria
@@ -64,6 +77,7 @@ body:
       placeholder: |
         - [ ] Run `cargo check` and paste the output
         - [ ] CI passes on the PR
+        - [ ] `cargo audit` is clean (for dependency changes)
     validations:
       required: true
 

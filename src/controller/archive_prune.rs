@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! History Archive Pruning Utility
 //!
 //! Provides safe pruning of old Stellar history archive checkpoints from S3/storage.
@@ -256,7 +268,7 @@ async fn scan_s3_checkpoints(location: &ArchiveLocation) -> Result<Vec<Checkpoin
     // {prefix}/hex/hex/hex/history-{hash}.xdr.gz
     // {prefix}/.well-known/stellar-history.json
 
-    // TODO: Implement actual S3 scanning with aws-sdk-s3
+    // TODO(exempt: pending aws-sdk-s3 integration): Implement actual S3 scanning
     warn!("S3 scanning not yet implemented - returning empty checkpoint list");
     Ok(vec![])
 }
@@ -264,7 +276,7 @@ async fn scan_s3_checkpoints(location: &ArchiveLocation) -> Result<Vec<Checkpoin
 /// Scan GCS bucket for checkpoints
 async fn scan_gcs_checkpoints(location: &ArchiveLocation) -> Result<Vec<Checkpoint>, Error> {
     debug!("Scanning GCS bucket: {}", location.bucket);
-    // TODO: Implement GCS scanning
+    // TODO(exempt: pending GCS client): Implement GCS scanning
     warn!("GCS scanning not yet implemented - returning empty checkpoint list");
     Ok(vec![])
 }
@@ -567,7 +579,7 @@ async fn delete_s3_checkpoint(
     _checkpoint: &Checkpoint,
     _location: &ArchiveLocation,
 ) -> Result<(), Error> {
-    // TODO: Implement S3 deletion
+    // TODO(exempt: pending aws-sdk-s3 integration): Implement S3 deletion
     warn!("S3 deletion not yet implemented");
     Ok(())
 }
@@ -577,7 +589,7 @@ async fn delete_gcs_checkpoint(
     _checkpoint: &Checkpoint,
     _location: &ArchiveLocation,
 ) -> Result<(), Error> {
-    // TODO: Implement GCS deletion
+    // TODO(exempt: pending GCS client): Implement GCS deletion
     warn!("GCS deletion not yet implemented");
     Ok(())
 }

@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Cost optimization dashboard spec and drill-down reporting
 
 use serde::{Deserialize, Serialize};
@@ -36,8 +48,12 @@ impl CostDashboard {
         forecasts: &[CostForecast],
     ) -> Self {
         let total = allocation.total();
-        let savings: f64 = recommendations.iter().map(|r| r.estimated_monthly_savings).sum();
-        let forecast_30d = forecasts.iter().map(|f| f.forecast_30d_usd).sum::<f64>() / forecasts.len().max(1) as f64;
+        let savings: f64 = recommendations
+            .iter()
+            .map(|r| r.estimated_monthly_savings)
+            .sum();
+        let forecast_30d = forecasts.iter().map(|f| f.forecast_30d_usd).sum::<f64>()
+            / forecasts.len().max(1) as f64;
 
         let namespace_breakdown = allocation
             .by_namespace()
@@ -46,7 +62,11 @@ impl CostDashboard {
                 namespace: ns.namespace.clone(),
                 team: ns.team.clone(),
                 cost_usd: ns.total_cost_usd,
-                cost_pct: if total > 0.0 { ns.total_cost_usd / total * 100.0 } else { 0.0 },
+                cost_pct: if total > 0.0 {
+                    ns.total_cost_usd / total * 100.0
+                } else {
+                    0.0
+                },
             })
             .collect();
 
@@ -63,13 +83,19 @@ impl CostDashboard {
              stellar_cost_potential_savings_usd {:.2}\n\
              # TYPE stellar_cost_anomalies_active gauge\n\
              stellar_cost_anomalies_active {}\n",
-            total, savings, anomalies.len(),
+            total,
+            savings,
+            anomalies.len(),
         );
 
         Self {
             total_monthly_cost_usd: total,
             total_potential_savings_usd: savings,
-            savings_pct: if total > 0.0 { savings / total * 100.0 } else { 0.0 },
+            savings_pct: if total > 0.0 {
+                savings / total * 100.0
+            } else {
+                0.0
+            },
             active_anomalies: anomalies.len(),
             top_recommendations,
             namespace_breakdown,

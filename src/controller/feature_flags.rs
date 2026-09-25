@@ -1,17 +1,24 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Runtime feature flags loaded from the `stellar-operator-config` ConfigMap.
 //!
 //! The operator watches this ConfigMap and reloads flags without restart.
 //!
-//! # Available Feature Flags
-//!
-//! | Flag | Default | Description |
-//! |------|---------|-------------|
-//! | `enable_cve_scanning` | `true` | Enable automatic CVE patch reconciliation |
-//! | `enable_read_pool` | `false` | Enable read-replica pool management |
-//! | `enable_dr` | `false` | Enable disaster-recovery drill scheduling |
-//! | `enable_peer_discovery` | `true` | Enable automatic peer discovery |
-//! | `enable_archive_health` | `true` | Enable history archive health checks |
-//! | `enable_soroban_metrics` | `true` | Enable Soroban-specific Prometheus metrics |
+//! Dead flags that no longer gated any code paths
+//! (`enable_cve_scanning`, `enable_read_pool`, `enable_peer_discovery`,
+//! `enable_archive_health`, `enable_soroban_metrics`, `enable_scp_topology`)
+//! were removed. Only `enable_dr` remains — it gates Helm-rendered DR /
+//! cross-region resources and is reserved for runtime DR drill scheduling.
 //!
 //! # ConfigMap Example
 //!
@@ -22,12 +29,7 @@
 //!   name: stellar-operator-config
 //!   namespace: stellar-system
 //! data:
-//!   enable_cve_scanning: "true"
-//!   enable_read_pool: "false"
 //!   enable_dr: "false"
-//!   enable_peer_discovery: "true"
-//!   enable_archive_health: "true"
-//!   enable_soroban_metrics: "true"
 //! ```
 
 use std::collections::BTreeMap;
@@ -50,14 +52,7 @@ pub const FEATURE_FLAGS_CONFIGMAP: &str = "stellar-operator-config";
 ///
 /// Any key present in the ConfigMap that is *not* listed here is treated as
 /// unknown and surfaced as a [`FlagValidationWarning::UnknownKey`].
-pub const KNOWN_FLAGS: &[&str] = &[
-    "enable_cve_scanning",
-    "enable_read_pool",
-    "enable_dr",
-    "enable_peer_discovery",
-    "enable_archive_health",
-    "enable_soroban_metrics",
-];
+pub const KNOWN_FLAGS: &[&str] = &["enable_dr"];
 
 /// A warning produced by [`validate_config_map_data`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,33 +105,10 @@ pub fn validate_config_map_data(data: &BTreeMap<String, String>) -> Vec<FlagVali
 }
 
 /// Runtime feature flags. All fields default to safe production values.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct FeatureFlags {
-    /// Enable automatic CVE patch reconciliation.
-    pub enable_cve_scanning: bool,
-    /// Enable read-replica pool management.
-    pub enable_read_pool: bool,
-    /// Enable disaster-recovery drill scheduling.
+    /// Enable disaster-recovery drill scheduling / cross-region DR resources.
     pub enable_dr: bool,
-    /// Enable automatic peer discovery.
-    pub enable_peer_discovery: bool,
-    /// Enable history archive health checks.
-    pub enable_archive_health: bool,
-    /// Enable Soroban-specific Prometheus metrics collection.
-    pub enable_soroban_metrics: bool,
-}
-
-impl Default for FeatureFlags {
-    fn default() -> Self {
-        Self {
-            enable_cve_scanning: true,
-            enable_read_pool: false,
-            enable_dr: false,
-            enable_peer_discovery: true,
-            enable_archive_health: true,
-            enable_soroban_metrics: true,
-        }
-    }
 }
 
 impl FeatureFlags {
@@ -151,15 +123,7 @@ impl FeatureFlags {
         };
 
         Self {
-            enable_cve_scanning: parse("enable_cve_scanning", defaults.enable_cve_scanning),
-            enable_read_pool: parse("enable_read_pool", defaults.enable_read_pool),
             enable_dr: parse("enable_dr", defaults.enable_dr),
-            enable_peer_discovery: parse("enable_peer_discovery", defaults.enable_peer_discovery),
-            enable_archive_health: parse("enable_archive_health", defaults.enable_archive_health),
-            enable_soroban_metrics: parse(
-                "enable_soroban_metrics",
-                defaults.enable_soroban_metrics,
-            ),
         }
     }
 }
@@ -279,26 +243,15 @@ fn extract_actor(cm: &ConfigMap) -> String {
 
 /// Log each flag that changed at INFO level.
 fn log_flag_changes(old: &FeatureFlags, new: &FeatureFlags, configmap_name: &str) {
-    macro_rules! log_if_changed {
-        ($field:ident) => {
-            if old.$field != new.$field {
-                info!(
-                    configmap = configmap_name,
-                    flag = stringify!($field),
-                    old = old.$field,
-                    new = new.$field,
-                    "Feature flag changed"
-                );
-            }
-        };
+    if old.enable_dr != new.enable_dr {
+        info!(
+            configmap = configmap_name,
+            flag = "enable_dr",
+            old = old.enable_dr,
+            new = new.enable_dr,
+            "Feature flag changed"
+        );
     }
-
-    log_if_changed!(enable_cve_scanning);
-    log_if_changed!(enable_read_pool);
-    log_if_changed!(enable_dr);
-    log_if_changed!(enable_peer_discovery);
-    log_if_changed!(enable_archive_health);
-    log_if_changed!(enable_soroban_metrics);
 }
 
 #[cfg(test)]
@@ -315,68 +268,34 @@ mod tests {
     #[test]
     fn test_defaults() {
         let flags = FeatureFlags::default();
-        assert!(flags.enable_cve_scanning);
-        assert!(!flags.enable_read_pool);
         assert!(!flags.enable_dr);
-        assert!(flags.enable_peer_discovery);
-        assert!(flags.enable_archive_health);
-        assert!(flags.enable_soroban_metrics);
     }
 
     #[test]
-    fn test_parse_all_true() {
-        let d = data(&[
-            ("enable_cve_scanning", "true"),
-            ("enable_read_pool", "true"),
-            ("enable_dr", "true"),
-            ("enable_peer_discovery", "true"),
-            ("enable_archive_health", "true"),
-            ("enable_soroban_metrics", "true"),
-        ]);
+    fn test_parse_enable_dr_true() {
+        let d = data(&[("enable_dr", "true")]);
         let flags = FeatureFlags::from_config_map_data(&d);
-        assert!(flags.enable_cve_scanning);
-        assert!(flags.enable_read_pool);
         assert!(flags.enable_dr);
-        assert!(flags.enable_peer_discovery);
-        assert!(flags.enable_archive_health);
-        assert!(flags.enable_soroban_metrics);
     }
 
     #[test]
-    fn test_parse_all_false() {
-        let d = data(&[
-            ("enable_cve_scanning", "false"),
-            ("enable_read_pool", "false"),
-            ("enable_dr", "false"),
-            ("enable_peer_discovery", "false"),
-            ("enable_archive_health", "false"),
-            ("enable_soroban_metrics", "false"),
-        ]);
+    fn test_parse_enable_dr_false() {
+        let d = data(&[("enable_dr", "false")]);
         let flags = FeatureFlags::from_config_map_data(&d);
-        assert!(!flags.enable_cve_scanning);
-        assert!(!flags.enable_read_pool);
         assert!(!flags.enable_dr);
-        assert!(!flags.enable_peer_discovery);
-        assert!(!flags.enable_archive_health);
-        assert!(!flags.enable_soroban_metrics);
     }
 
     #[test]
     fn test_parse_numeric_and_yes() {
-        let d = data(&[("enable_read_pool", "1"), ("enable_dr", "yes")]);
+        let d = data(&[("enable_dr", "yes")]);
         let flags = FeatureFlags::from_config_map_data(&d);
-        assert!(flags.enable_read_pool);
         assert!(flags.enable_dr);
     }
 
     #[test]
     fn test_missing_keys_use_defaults() {
-        let d = data(&[("enable_read_pool", "true")]);
-        let flags = FeatureFlags::from_config_map_data(&d);
-        // Only read_pool changed; everything else is default
-        assert!(flags.enable_read_pool);
-        assert!(flags.enable_cve_scanning); // default true
-        assert!(!flags.enable_dr); // default false
+        let flags = FeatureFlags::from_config_map_data(&BTreeMap::new());
+        assert!(!flags.enable_dr);
     }
 
     #[test]
@@ -384,8 +303,6 @@ mod tests {
         let d = data(&[("unknown_flag", "true"), ("enable_dr", "true")]);
         let flags = FeatureFlags::from_config_map_data(&d);
         assert!(flags.enable_dr);
-        // Defaults preserved for everything else
-        assert!(flags.enable_cve_scanning);
     }
 
     #[test]
@@ -396,10 +313,9 @@ mod tests {
 
     #[test]
     fn test_case_insensitive_true() {
-        let d = data(&[("enable_dr", "TRUE"), ("enable_read_pool", "True")]);
+        let d = data(&[("enable_dr", "TRUE")]);
         let flags = FeatureFlags::from_config_map_data(&d);
         assert!(flags.enable_dr);
-        assert!(flags.enable_read_pool);
     }
 
     #[tokio::test]
@@ -420,39 +336,20 @@ mod tests {
         assert!(flags.enable_dr);
     }
 
-    // ── Registry and validation tests ─────────────────────────────────────────
-
     #[test]
     fn known_flags_covers_all_struct_fields() {
-        // Every field on FeatureFlags must appear in KNOWN_FLAGS.
-        let all_keys: Vec<&str> = vec![
-            "enable_cve_scanning",
-            "enable_read_pool",
-            "enable_dr",
-            "enable_peer_discovery",
-            "enable_archive_health",
-            "enable_soroban_metrics",
-        ];
-        for key in &all_keys {
-            assert!(
-                KNOWN_FLAGS.contains(key),
-                "'{key}' is missing from KNOWN_FLAGS"
-            );
-        }
+        assert!(KNOWN_FLAGS.contains(&"enable_dr"));
+        assert_eq!(KNOWN_FLAGS.len(), 1);
     }
 
     #[test]
     fn validate_returns_no_warnings_for_known_keys() {
-        let d = data(&[
-            ("enable_cve_scanning", "true"),
-            ("enable_read_pool", "false"),
-            ("enable_dr", "yes"),
-            ("enable_peer_discovery", "1"),
-            ("enable_archive_health", "0"),
-            ("enable_soroban_metrics", "no"),
-        ]);
+        let d = data(&[("enable_dr", "yes")]);
         let warnings = validate_config_map_data(&d);
-        assert!(warnings.is_empty(), "expected no warnings, got: {warnings:?}");
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got: {warnings:?}"
+        );
     }
 
     #[test]
@@ -467,15 +364,21 @@ mod tests {
     }
 
     #[test]
-    fn validate_warns_on_multiple_unknown_keys() {
+    fn validate_warns_on_dead_flag_keys() {
+        // Former flags must now surface as unknown so operators notice removals.
         let d = data(&[
-            ("enable_dr", "true"),
-            ("foo_flag", "true"),
-            ("bar_flag", "false"),
+            ("enable_cve_scanning", "true"),
+            ("enable_read_pool", "true"),
+            ("enable_peer_discovery", "true"),
+            ("enable_archive_health", "true"),
+            ("enable_soroban_metrics", "true"),
+            ("enable_scp_topology", "true"),
         ]);
-        let mut warnings = validate_config_map_data(&d);
-        warnings.sort_by_key(|w| format!("{w:?}"));
-        assert_eq!(warnings.len(), 2);
+        let warnings = validate_config_map_data(&d);
+        assert_eq!(warnings.len(), 6);
+        assert!(warnings
+            .iter()
+            .all(|w| matches!(w, FlagValidationWarning::UnknownKey(_))));
     }
 
     #[test]

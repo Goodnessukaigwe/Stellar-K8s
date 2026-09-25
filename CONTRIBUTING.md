@@ -81,24 +81,17 @@ Before opening a PR, confirm the following:
 
 ### Required checks
 
-Run these locally before submitting. Always use the `make` targets — they
-wrap the underlying `cargo` commands with the workspace's feature flags
-(`rest-api`, `metrics`, `admission-webhook`, `k8s-v1-30`, `reconciler-fuzz`)
-and `K8S_OPENAPI_ENABLED_VERSION`, so plain `cargo fmt`/`cargo clippy`/`cargo
-test` invocations will not match CI exactly.
+Before submitting, run the contributor health gates via `make` (not raw
+`cargo` — Make targets set the workspace feature flags so results match CI):
 
 ```bash
-make fmt          # Auto-format (wraps `cargo fmt --all`)
-make lint         # Clippy with project feature flags (wraps `cargo clippy ...`)
-make test         # Workspace tests + doc tests (wraps `cargo test ...`)
-make ci-local     # Full local CI gate: fmt-check + lint + audit + test + build + link-check
+make health        # Format + lint + tests + docs
+make ci-local      # Full local CI gate (includes audit + link-check)
 ```
 
-If your change adds shell scripts or repository tooling, also run:
-
-```bash
-make shellcheck
-```
+The full checklist, command rationale, and per-step details live in the
+[Canonical Repository Health Checklist](docs/development/repo-health-checklist.md).
+If your change adds shell scripts, also run `make shellcheck`.
 
 ## 4. Commit Message Examples
 
@@ -163,7 +156,7 @@ The template ensures your change includes:
 
 ### Prerequisites
 
-- Rust stable (1.88+)
+- Rust 1.92+ (CI-enforced minimum — see `scripts/lib/versions.sh`)
 - Kubernetes local cluster (`kind`, `minikube`, etc.)
 - Docker
 - `cargo-audit`
@@ -171,43 +164,33 @@ The template ensures your change includes:
 
 ### Setup
 
-Use the OS setup script to install and pin all required tools, then run `make dev-setup` to install Rust components and pre-commit hooks:
+Docker, kind, kubectl, Helm, and `gh` must currently be installed manually
+for your OS (automated installers for these are tracked separately — see
+[DEVELOPMENT.md § Prerequisites](DEVELOPMENT.md#prerequisites) for the
+per-tool install links). Then run:
 
 ```bash
-# macOS
-bash scripts/setup-mac.sh
-
-# Linux (Ubuntu/Debian/Fedora)
-bash scripts/setup-linux.sh
-
-# Both platforms: install Rust components and pre-commit hooks
 make dev-setup
 ```
 
-Both setup scripts are idempotent and print a summary of installed versions.
+`make dev-setup` installs the Rust toolchain/components, `cargo-audit` and
+`cargo-watch`, and the `pre-commit` hooks, then runs
+`stellar-bootstrap-verify` as a final step and prints a pass/fail report of
+every required tool and version pin — see
+[DEVELOPMENT.md § Troubleshooting](DEVELOPMENT.md#missing-or-outdated-tools)
+if it reports anything missing or outdated.
 
 ### Local checks — Canonical Workflow
 
-Always drive the local pipeline through `make` targets. They wrap `cargo`
-with the workspace's feature flags so the results match CI exactly:
+Always drive the local pipeline through `make` targets so results match CI:
 
 ```bash
-make dev-setup     # One-time: install Rust toolchain, tools, and pre-commit hooks
-make quick         # Fast pre-commit check (fmt-check + cargo check)
-make ci-local      # Full CI pipeline (fmt-check + lint + audit + test + build + link-check)
-make health        # Full contributor health gate
+make health        # Contributor health gate
+make ci-local      # Full CI pipeline locally
 ```
 
-Or run individual steps:
-
-```bash
-make fmt           # Format (wraps `cargo fmt --all`)
-make lint          # Clippy with project feature flags
-make test          # Workspace tests + doc tests
-make security-all  # Audit + shellcheck
-make link-check    # Markdown link/anchor check (PR-time)
-make link-check-all # Repo-wide link check via lychee (markdown + source + configs)
-```
+See the [Canonical Repository Health Checklist](docs/development/repo-health-checklist.md)
+for the full command set and per-step expectations.
 
 ## 8. Coding Standards
 
@@ -230,13 +213,16 @@ make link-check-all # Repo-wide link check via lychee (markdown + source + confi
 - Documentation files use `kebab-case.md` (e.g., `disk-scaling.md`).
 - Files that belong to a topic area go in the matching `docs/<topic>/` subdirectory.
 - Root-level docs (`README.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`) are entry points only — detailed content belongs in `docs/`.
-- New doc files must be linked from `docs/README.md` under the appropriate section.
+- New doc files must be added to `mkdocs.yml` under the appropriate section.
 
 ### Script conventions
 
-- Scripts use `kebab-case.sh` (e.g., `setup-mac.sh`).
+- Scripts use `kebab-case.sh` (e.g., `cleanup.sh`).
 - Every script must pass `shellcheck -S error`.
-- Historical or one-off scripts should be moved to `scripts/archive/` rather than left in the root of `scripts/`.
+- Do not add one-off archive or batch scripts under `scripts/`. Use
+  `scripts/cleanup.sh` (`make cleanup`) as the single cleanup entrypoint, or
+  remove obsolete helpers entirely.
+- Historical or one-off scripts should not be committed to the repository; keep only operational scripts under `scripts/`.
 
 ### Manifest and config conventions
 
@@ -246,15 +232,19 @@ make link-check-all # Repo-wide link check via lychee (markdown + source + confi
 
 ## 9. Repo Health Checklist
 
+Before marking a PR ready for review, run `make health` (or `make ci-local`
+for the full audit + link-check gate) and complete every item in the
+[Canonical Repository Health Checklist](docs/development/repo-health-checklist.md).
+That document is the single source of truth — do not duplicate command blocks here.
 Run through this before marking a PR ready for review:
 
 - [ ] `make health` passes (format + lint + test + docs) — or `make ci-local` for the full audit + link-check gate
-- [ ] `make validate` passes for a quick pre-push compile check
+- [ ] `make health-fast` passes for a quick pre-push compile check
 - [ ] No new `#[allow(dead_code)]` without an explanatory comment
 - [ ] No unused imports in modified files
 - [ ] Generated manifests are up to date with their source
 - [ ] Shell scripts pass `shellcheck -S error`
-- [ ] New doc files are linked from `docs/README.md`
+- [ ] New doc files are added to `mkdocs.yml`
 - [ ] Commit messages follow Conventional Commits and include a `Signed-off-by` line
 Before requesting a review for a Pull Request, please ensure all checks listed in the [Canonical Repository Health Checklist](docs/development/repo-health-checklist.md) have been run and verified.
 

@@ -116,10 +116,9 @@ make bundle VERSION=0.1.0
 operator-sdk bundle validate ./bundle
 ```
 
-`bundle/manifests/stellar-operator.clusterserviceversion.yaml` is fully generated and is
-**gitignored** — regenerate it locally with `make bundle` before running `operator-sdk bundle
-validate` or `make bundle-build`. Only `bundle/metadata/annotations.yaml` (hand-written channel
-and package metadata) is committed.
+The whole `bundle/` directory (including `metadata/annotations.yaml` and the CSV) is fully
+generated and **gitignored** — regenerate it locally with `make bundle` before running
+`operator-sdk bundle validate` or `make bundle-build`. Do not commit bundle output.
 
 ---
 
@@ -129,6 +128,13 @@ and package metadata) is committed.
 
 ```bash
 kubectl apply -f config/crd/
+```
+
+Benchmark workloads require the canonical benchmark CRDs (not bundled in the Helm chart):
+
+```bash
+kubectl apply -f config/crd/stellarbenchmark-crd.yaml
+kubectl apply -f config/crd/stellarbenchmarkreport-crd.yaml
 ```
 
 ### Apply Sample Resources

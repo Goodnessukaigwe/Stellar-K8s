@@ -110,6 +110,14 @@
         },
         "watchNamespace": {
           "type": "string"
+        },
+        "profiling": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
@@ -152,6 +160,93 @@
     "otel": {
       "type": "object"
     },
+    "logShipper": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "When true, render the per-node Fluent Bit log shipper DaemonSet"
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"]
+            }
+          }
+        },
+        "kubernetesFilter": {
+          "type": "boolean"
+        },
+        "jsonParsing": {
+          "type": "boolean"
+        },
+        "logLevel": {
+          "type": "string",
+          "enum": ["info", "warn", "error", "debug"]
+        },
+        "resources": {
+          "type": "object"
+        },
+        "loki": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "tenantId": {
+              "type": "string"
+            }
+          }
+        },
+        "elasticsearch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "index": {
+              "type": "string"
+            }
+          }
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        }
+      }
+    },
     "scpAnalytics": {
       "type": "object"
     },
@@ -159,6 +254,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "When true, render admission webhook resources"
+        },
         "replicaCount": {
           "type": "integer",
           "minimum": 1,
@@ -190,6 +289,17 @@
         "resources": {
           "type": "object",
           "description": "Resource requests and limits for the webhook server container"
+        },
+        "certManager": {
+          "type": "object",
+          "description": "Optional cert-manager Certificate/ClusterIssuer rendering for webhook TLS",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "When true, render cert-manager Certificate and ClusterIssuer resources"
+            }
+          }
         }
       }
     }

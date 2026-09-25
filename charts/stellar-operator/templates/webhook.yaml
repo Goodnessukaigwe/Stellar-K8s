@@ -1,3 +1,4 @@
+{{- if .Values.webhook.enabled }}
 ---
 # Namespace for the webhook
 apiVersion: v1
@@ -173,9 +174,11 @@ metadata:
   name: stellar-webhook
   labels:
     app.kubernetes.io/name: stellar-webhook
+  {{- if .Values.webhook.certManager.enabled }}
   annotations:
     # cert-manager will inject the CA bundle
     cert-manager.io/inject-ca-from: stellar-webhook/stellar-webhook-cert
+  {{- end }}
 webhooks:
   - name: stellarnode.stellar.io
     clientConfig:
@@ -205,6 +208,7 @@ webhooks:
           values:
             - kube-system
             - stellar-webhook
+{{- if .Values.webhook.certManager.enabled }}
 ---
 # Certificate for the webhook (cert-manager)
 apiVersion: cert-manager.io/v1
@@ -232,6 +236,7 @@ metadata:
   name: selfsigned-issuer
 spec:
   selfSigned: {}
+{{- end }}
 ---
 # ConfigMap for plugin configuration (optional)
 apiVersion: v1
@@ -262,3 +267,4 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: stellar-webhook
+{{- end }}

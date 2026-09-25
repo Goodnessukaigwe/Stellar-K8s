@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Custom Resource Definitions for Stellar-K8s
 //!
 //! This module defines the Kubernetes CRDs for managing Stellar infrastructure.
@@ -47,6 +59,8 @@
 //!     enableHistoryArchive: true
 //! ```
 
+#[cfg(test)]
+mod blue_green_schema_test;
 mod cnpg;
 pub mod dr_policy;
 pub mod federation;
@@ -68,12 +82,17 @@ pub mod stellar_upgrade;
 pub mod tenant;
 pub mod traffic_policy;
 pub mod types;
+pub use tenant::{
+    TenantBillingSpec, TenantCondition, TenantNetworkIsolation, TenantQuotaHard, TenantSpec,
+    TenantSpecCrd, TenantStatus, TenantUsageCrd, TenantUsageSpec, TenantUsageStatus,
+};
 
 // New Epic CRDs (Wave 5)
 pub mod stellar_aiops;
 pub mod stellar_database;
 pub mod stellar_disaster_recovery;
 pub mod stellar_gitops;
+pub mod service_ownership;
 pub mod stellar_registry;
 pub mod stellar_security;
 

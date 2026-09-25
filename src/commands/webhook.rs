@@ -1,11 +1,23 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use crate::cli::{LogFormat, WebhookArgs};
-use stellar_k8s::logging::{init_subscriber, LogOutputFormat, SubscriberConfig};
-use stellar_k8s::Error;
+use crate::logging::{init_subscriber, LogOutputFormat, SubscriberConfig};
+use crate::Error;
 use tracing::{info, info_span, warn, Level};
 
 #[cfg(feature = "admission-webhook")]
 pub async fn run_webhook(args: WebhookArgs) -> Result<(), Error> {
-    use stellar_k8s::webhook::{runtime::WasmRuntime, server::WebhookServer};
+    use crate::webhook::{runtime::WasmRuntime, server::WebhookServer};
 
     let log_format = match args.log_format {
         LogFormat::Json => LogOutputFormat::Json,
@@ -16,33 +28,9 @@ pub async fn run_webhook(args: WebhookArgs) -> Result<(), Error> {
     init_subscriber(SubscriberConfig {
         level: log_level,
         format: log_format,
+        otel: true,
         ..Default::default()
     });
-    let scrub_layer = ScrubLayer::new();
-
-    match args.log_format {
-        LogFormat::Json => {
-            let fmt_layer = fmt::layer()
-                .json()
-                .flatten_event(true)
-                .with_current_span(true)
-                .with_span_list(true)
-                .with_target(true);
-            tracing_subscriber::registry()
-                .with(env_filter)
-                .with(scrub_layer)
-                .with(fmt_layer)
-                .init();
-        }
-        LogFormat::Pretty => {
-            let fmt_layer = fmt::layer().pretty().with_target(true);
-            tracing_subscriber::registry()
-                .with(env_filter)
-                .with(scrub_layer)
-                .with(fmt_layer)
-                .init();
-        }
-    }
 
     let namespace = std::env::var("OPERATOR_NAMESPACE").unwrap_or_else(|_| "default".to_string());
 

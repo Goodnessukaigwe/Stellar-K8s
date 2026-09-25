@@ -1,9 +1,0 @@
-# log-stream.yaml — dev ConfigMap snippet for structured log forwarding
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: stellar-log-stream
-  namespace: stellar
-data:
-  log-format: json
-  redaction: enabled

@@ -1,19 +1,24 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+mod common;
+
+use common::skip_if_tools_missing;
 use std::collections::HashMap;
 use std::error::Error;
 use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use tracing::info;
-
-/// Returns true if the given binary is accessible in PATH.
-fn tool_available(binary: &str) -> bool {
-    Command::new(binary)
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok()
-}
 
 const OPERATOR_NAMESPACE: &str = "stellar-system";
 const TEST_NAMESPACE: &str = "stellar-e2e";
@@ -45,11 +50,8 @@ const UPGRADE_NODE_NAME: &str = "upgrade-soroban";
 fn e2e_stellarnode_reconciliation() -> Result<(), Box<dyn std::error::Error>> {
     // ── Prerequisite check ─────────────────────────────────────────────────────
     // Skip gracefully when the required cluster tools are not installed.
-    for tool in &["kind", "kubectl", "docker"] {
-        if !tool_available(tool) {
-            eprintln!("Skipping e2e test: `{tool}` not found in PATH.");
-            return Ok(());
-        }
+    if skip_if_tools_missing(&["kind", "kubectl", "docker"]) {
+        return Ok(());
     }
 
     let cluster_name = std::env::var("KIND_CLUSTER_NAME").unwrap_or_else(|_| "stellar-e2e".into());

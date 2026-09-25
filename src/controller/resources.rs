@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Kubernetes resource builders for StellarNode
 //!
 //! This module creates and manages the underlying Kubernetes resources
@@ -586,7 +598,15 @@ pub(crate) fn build_config_map(
             }
 
             if enable_mtls {
-                core_cfg.push_str("\n# mTLS Configuration\n");
+                // NOTE: these keys are written best-effort and have not been verified
+                // against a real stellar-core build; stellar-core's admin/HTTP endpoint
+                // does not have documented native HTTPS termination in upstream
+                // releases as of this writing, so this may be a no-op depending on the
+                // stellar-core version in use. The client certificate material is still
+                // correctly issued and mounted at /etc/stellar/tls regardless. See the
+                // "Known Limitation" section in docs/mtls-guide.md and
+                // docs/security/e2e-encryption-architecture.md.
+                core_cfg.push_str("\n# mTLS Configuration (best-effort; see docs/mtls-guide.md)\n");
                 core_cfg.push_str("HTTP_PORT_SECURE=true\n");
                 core_cfg.push_str("TLS_CERT_FILE=\"/etc/stellar/tls/tls.crt\"\n");
                 core_cfg.push_str("TLS_KEY_FILE=\"/etc/stellar/tls/tls.key\"\n");
@@ -823,7 +843,7 @@ pub async fn ensure_canary_deployment(
     Ok(())
 }
 
-fn build_deployment(node: &StellarNode, enable_mtls: bool) -> Deployment {
+pub(crate) fn build_deployment(node: &StellarNode, enable_mtls: bool) -> Deployment {
     let mut labels = standard_labels(node);
     let name = node.name_any();
 
@@ -1078,10 +1098,34 @@ pub async fn ensure_canary_service(
     Ok(())
 }
 
-fn build_service(node: &StellarNode, enable_mtls: bool) -> Service {
+pub(crate) fn build_service(node: &StellarNode, enable_mtls: bool) -> Service {
     let mut labels = standard_labels(node);
     merge_service_metadata_labels(&mut labels, node);
     let name = node.name_any();
+
+    // Validator blue/green: Service must select only the active publishing color.
+    let mut selector = labels.clone();
+    if node.spec.node_type == NodeType::Validator
+        && node.spec.strategy.strategy_type == RolloutStrategyType::BlueGreen
+    {
+        let active = node
+            .status
+            .as_ref()
+            .and_then(|s| s.blue_green_active_color.as_deref())
+            .or_else(|| {
+                node.metadata
+                    .annotations
+                    .as_ref()
+                    .and_then(|a| a.get("stellar.org/bg-active-color"))
+                    .map(|s| s.as_str())
+            })
+            .unwrap_or("blue");
+        selector.insert(
+            "stellar.org/deployment-color".to_string(),
+            active.to_string(),
+        );
+        selector.insert("stellar.org/bg-role".to_string(), "active".to_string());
+    }
 
     let mut annotations = BTreeMap::new();
 
@@ -1175,7 +1219,7 @@ fn build_service(node: &StellarNode, enable_mtls: bool) -> Service {
             &None,
         ),
         spec: Some(ServiceSpec {
-            selector: Some(labels),
+            selector: Some(selector),
             ports: Some(ports),
             ..Default::default()
         }),
@@ -1474,7 +1518,6 @@ pub async fn delete_cnpg_resources(
 /// Ensure a Kubernetes Ingress resource exists for the node.
 /// Called from the reconciler for Horizon and SorobanRpc node types when
 /// `spec.ingress` is set.
-#[allow(dead_code)] // called via reconciler ingress path; conditional on feature flag
 pub async fn ensure_ingress(client: &Client, node: &StellarNode, dry_run: bool) -> Result<()> {
     let ingress_cfg = match &node.spec.ingress {
         Some(cfg)
@@ -4604,50 +4647,6 @@ pub async fn delete_pdb(client: &Client, node: &StellarNode, dry_run: bool) -> R
     }
 
     Ok(())
-}
-
-// ============================================================================
-// Test helpers — thin wrappers that expose private builders for unit tests
-// (Issue #298)
-// ============================================================================
-
-#[cfg(test)]
-pub(crate) fn build_pdb_for_test(
-    node: &StellarNode,
-) -> Option<k8s_openapi::api::policy::v1::PodDisruptionBudget> {
-    build_pdb(node)
-}
-
-#[cfg(test)]
-pub(crate) fn build_pvc_for_test(
-    node: &StellarNode,
-    storage_class: String,
-) -> k8s_openapi::api::core::v1::PersistentVolumeClaim {
-    build_pvc(node, storage_class)
-}
-
-#[cfg(test)]
-pub(crate) fn build_config_map_for_test(node: &StellarNode) -> ConfigMap {
-    build_config_map(node, None, false)
-}
-
-#[cfg(test)]
-pub(crate) fn build_deployment_for_test(
-    node: &StellarNode,
-) -> k8s_openapi::api::apps::v1::Deployment {
-    build_deployment(node, false)
-}
-
-#[cfg(test)]
-pub(crate) fn build_statefulset_for_test(
-    node: &StellarNode,
-) -> k8s_openapi::api::apps::v1::StatefulSet {
-    build_statefulset(node, false, None)
-}
-
-#[cfg(test)]
-pub(crate) fn build_service_for_test(node: &StellarNode) -> k8s_openapi::api::core::v1::Service {
-    build_service(node, false)
 }
 
 #[cfg(test)]

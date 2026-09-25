@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use chrono::Utc;
 use k8s_openapi::api::coordination::v1::Lease;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::MicroTime;
@@ -7,11 +19,11 @@ use std::sync::Arc;
 use tracing::{info, info_span, warn, Instrument, Level};
 
 use crate::cli::{LogFormat, RunArgs};
-use stellar_k8s::logging::{init_subscriber, LogOutputFormat, SubscriberConfig};
-use stellar_k8s::logging::analytics::AnalyticsEngine;
+use crate::logging::analytics::AnalyticsEngine;
+use crate::logging::{init_subscriber, LogOutputFormat, SubscriberConfig};
 #[cfg(feature = "rest-api")]
-use stellar_k8s::rest_api::metrics_store::StellarMetricsStore;
-use stellar_k8s::{controller, preflight, Error};
+use crate::rest_api::metrics_store::StellarMetricsStore;
+use crate::{controller, preflight, Error};
 
 const LEASE_NAME: &str = "stellar-operator-leader";
 const LEASE_DURATION_SECS: i32 = 15;
@@ -49,10 +61,7 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
         LogFormat::Json => LogOutputFormat::Json,
         LogFormat::Pretty => LogOutputFormat::Pretty,
     };
-    let log_level = args
-        .log_level
-        .parse()
-        .unwrap_or(Level::INFO);
+    let log_level = args.log_level.parse().unwrap_or(Level::INFO);
 
     let subscriber = init_subscriber(SubscriberConfig {
         level: log_level,
@@ -68,30 +77,6 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
     let analytics_engine = subscriber
         .analytics_engine
         .unwrap_or_else(|| Arc::new(AnalyticsEngine::new(std::time::Duration::from_secs(3600))));
-    // Initialize tracing with OpenTelemetry
-    let env_filter = EnvFilter::builder()
-        .with_default_directive(Level::INFO.into())
-        .from_env_lossy();
-
-    let (env_filter, reload_handle) = tracing_subscriber::reload::Layer::new(env_filter);
-
-    let analytics_engine = Arc::new(AnalyticsEngine::new(std::time::Duration::from_secs(3600)));
-    let analytics_layer = AnalyticsLayer::new(SamplingConfig::default(), analytics_engine.clone());
-
-    let fmt_layer = fmt::layer()
-        .json()
-        .flatten_event(true)
-        .with_current_span(true)
-        .with_span_list(true)
-        .with_target(true);
-
-    // Register the subscriber with both stdout logging and OpenTelemetry tracing
-    let registry = tracing_subscriber::registry()
-        .with(env_filter)
-        .with(ScrubLayer::new())
-        .with(analytics_layer)
-        .with(fmt_layer);
-
     let otel_enabled = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok();
 
     let root_span = info_span!(
@@ -155,7 +140,7 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
             "Running in scheduler mode with name: {}",
             args.scheduler_name
         );
-        let scheduler = stellar_k8s::scheduler::core::Scheduler::new(client, args.scheduler_name);
+        let scheduler = crate::scheduler::core::Scheduler::new(client, args.scheduler_name);
         return scheduler
             .run()
             .await
@@ -286,7 +271,7 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
         audit_log: audit_log.clone(),
         audit_recorder: audit_recorder.clone(),
         anomaly_detector: anomaly_detector.clone(),
-        plugin_registry: Arc::new(stellar_k8s::plugin_sdk::PluginRegistry::new()),
+        plugin_registry: Arc::new(crate::plugin_sdk::PluginRegistry::new()),
         analytics_engine: analytics_engine.clone(),
         #[cfg(feature = "rest-api")]
         oidc_config,
@@ -342,19 +327,15 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
         let rustls_config = mtls_config
             .as_ref()
             .and_then(|cfg| {
-                stellar_k8s::rest_api::build_tls_server_config(
-                    &cfg.cert_pem,
-                    &cfg.key_pem,
-                    &cfg.ca_pem,
-                )
-                .ok()
+                crate::rest_api::build_tls_server_config(&cfg.cert_pem, &cfg.key_pem, &cfg.ca_pem)
+                    .ok()
             })
             .map(axum_server::tls_rustls::RustlsConfig::from_config);
         let server_tls = rustls_config.clone();
 
         tokio::spawn(
             async move {
-                if let Err(e) = stellar_k8s::rest_api::run_server(api_state, server_tls).await {
+                if let Err(e) = crate::rest_api::run_server(api_state, server_tls).await {
                     tracing::error!("REST API server error: {:?}", e);
                 }
             }
@@ -401,7 +382,7 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
                                         secret.data.as_ref().and_then(|d| d.get("tls.key")),
                                         secret.data.as_ref().and_then(|d| d.get("ca.crt")),
                                     ) {
-                                        match stellar_k8s::rest_api::build_tls_server_config(
+                                        match crate::rest_api::build_tls_server_config(
                                             &cert.0, &key.0, &ca.0,
                                         ) {
                                             Ok(new_config) => {
@@ -462,7 +443,7 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
 
     // Start the snapshot integrity checker background worker
     {
-        use stellar_k8s::controller::snapshot_integrity::{
+        use crate::controller::snapshot_integrity::{
             SnapshotIntegrityChecker, SnapshotIntegrityConfig,
         };
 
@@ -504,7 +485,7 @@ pub async fn run_operator(args: RunArgs) -> Result<(), Error> {
         }
     };
 
-    stellar_k8s::telemetry::shutdown_telemetry();
+    crate::telemetry::shutdown_telemetry();
     result
 }
 

@@ -1,3 +1,0 @@
-# port-forward-api.yaml — notes for REST API local access
-#   kubectl port-forward -n stellar-system svc/stellar-operator 8080:8080
-#   curl http://localhost:8080/healthz

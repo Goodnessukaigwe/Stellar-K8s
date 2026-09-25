@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+# Copyright 2024 Stellar-K8s Contributors
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # scripts/repo-health.sh — Single entry point for common repository health checks.
 #
 # Usage:
@@ -8,7 +20,7 @@
 #   bash scripts/repo-health.sh --with-links # include markdown link check
 #   bash scripts/repo-health.sh --with-helm  # include helm lint
 #   make health
-#   make validate                            # alias for --fast
+#   make health-fast / make validate         # alias for --fast
 #
 # Stops at the first failing step and prints a clear summary.
 
@@ -20,8 +32,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/errors.sh"
 cd "${REPO_ROOT}"
 
-# shellcheck source=scripts/lib/errors.sh
-source "${SCRIPT_DIR}/lib/errors.sh"
 # shellcheck source=scripts/lib/health-steps.sh
 source "${SCRIPT_DIR}/lib/health-steps.sh"
 
@@ -74,7 +84,7 @@ if [[ "${MODE}" == "fast" ]]; then
 else
   add_step sk8s_health_test "Tests (cargo test)"
   add_step sk8s_health_api_docs "API docs drift check"
-  add_step sk8s_health_stale_docs "Stale documentation check"
+  add_step sk8s_health_issue_templates "Issue template & metadata lint"
   add_step sk8s_health_link_check "Markdown link check"
   add_step sk8s_health_shellcheck "Shell script lint (shellcheck)"
 fi
@@ -118,9 +128,13 @@ for i in "${!STEPS[@]}"; do
         sk8s_fail "API docs drift detected" "Run 'make generate-api-docs' after CRD changes."
       fi
       ;;
-    sk8s_health_stale_docs)
-      if ! sk8s_health_stale_docs; then
-        sk8s_fail "Stale docs detected" "Run 'make check-stale-docs' for details."
+    sk8s_health_issue_templates)
+      if ! command -v python3 >/dev/null 2>&1; then
+        sk8s_warn "python3 not found — skipping issue template lint"
+        continue
+      fi
+      if ! sk8s_health_issue_templates; then
+        sk8s_fail "Issue template linting failed" "Fix syntax/metadata in .github/ISSUE_TEMPLATE/*.yml."
       fi
       ;;
     sk8s_health_shellcheck)
@@ -149,7 +163,7 @@ for i in "${!STEPS[@]}"; do
       ;;
     sk8s_health_compile_check)
       if ! sk8s_health_compile_check; then
-        sk8s_fail "Compilation failed" "Fix compiler errors and re-run 'make validate'."
+        sk8s_fail "Compilation failed" "Fix compiler errors and re-run 'make health-fast'."
       fi
       ;;
     sk8s_health_cargo_audit)

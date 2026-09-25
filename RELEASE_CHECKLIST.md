@@ -53,22 +53,22 @@
 
 ## Validation Gate
 
-The script `scripts/release-gate.sh` is run automatically by
-`.github/workflows/release-gate.yml` on every `v*.*.*` tag push.  
-It verifies the following **hard gates** — a failing gate blocks the release:
+The `.github/workflows/release-gate.yml` workflow runs automatically on every
+`v*.*.*` tag push and verifies the following **hard gates** — a failing gate
+blocks the release:
 
 | Gate | Command | Failure Action |
 |------|---------|----------------|
-| Version format | semver regex | Abort |
-| Cargo.toml matches tag | grep + compare | Abort |
-| Chart.yaml matches tag | grep + compare | Abort |
 | CHANGELOG entry exists | grep | Abort |
-| `cargo audit` clean | `cargo audit` | Abort |
-| Helm lint passes | `helm lint --strict` | Abort |
 | Helm unit tests pass | `helm unittest --strict` | Abort |
 
-Run the gate locally before tagging:
+Semver format, Cargo.toml / Chart.yaml tag matching, `cargo audit`, and
+`helm lint --strict` are enforced by `release.yml` and `ci.yml` — they are not
+duplicated in the release gate.
+
+Run the gate's checks locally before tagging:
 
 ```bash
-VERSION=1.2.0 bash scripts/release-gate.sh
+grep -qE "^## \[?v?1\.2\.0\]?" CHANGELOG.md   # CHANGELOG entry exists
+helm unittest charts/stellar-operator --strict
 ```

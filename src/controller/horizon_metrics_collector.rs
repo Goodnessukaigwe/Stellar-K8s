@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Background task that polls Horizon and Stellar-Core endpoints for live metrics
 //! and writes them into the shared [`StellarMetricsStore`].
 //!
@@ -228,7 +240,7 @@ impl HorizonMetricsCollector {
                 crate::crd::StellarNetwork::Custom(_) => "custom",
             }
             .to_string();
-            let hardware_generation = "unknown".to_string(); // TODO: resolve from infra
+            let hardware_generation = "unknown".to_string(); // TODO(exempt: pending infra lookup): resolve from infra
 
             endpoints.push(HorizonEndpoint {
                 namespace,
@@ -327,8 +339,7 @@ pub fn parse_prometheus_metrics(text: &str) -> StellarMetricsSnapshot {
         };
 
         // Extract label block (between '{' and '}') and value after '}'.
-        let (labels_str, value_str) = if rest.starts_with('{') {
-            let after_open = &rest[1..];
+        let (labels_str, value_str) = if let Some(after_open) = rest.strip_prefix('{') {
             if let Some(close) = after_open.find('}') {
                 let lbls = &after_open[..close];
                 let val = after_open[close + 1..].trim();

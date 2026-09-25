@@ -35,26 +35,26 @@ Each match is replaced with `[REDACTED:<rule_name>]` so that:
 
 ```
 tracing event
-      │
-      ▼
+    │
+    ▼
  EnvFilter (level gate)
-      │
-      ▼
+    │
+    ▼
  AnalyticsLayer (optional, operator only)
-      │
-      ▼
+    │
+    ▼
  fmt::Layer + RedactingFields   ← field values run through redact() before output
-      │
-      ▼
+    │
+    ▼
  OTLP Layer (optional)          ← exports to collector
 ```
 
 All operator binaries should initialize logging via `stellar_k8s::logging::init_subscriber`
 (or `init_binary_subscriber` for sidecars). This ensures JSON/pretty output uses
-[`RedactingFields`](../../src/log_scrub.rs) so secrets are replaced with
+[`RedactingFields`](../src/log_scrub.rs) so secrets are replaced with
 `[REDACTED:<rule_name>]` markers before they reach stdout.
 
-[`ScrubLayer`](../../src/log_scrub.rs) remains available as a detection-only layer that
+[`ScrubLayer`](../src/log_scrub.rs) remains available as a detection-only layer that
 emits `[LOG_SCRUB]` warnings; prefer the shared subscriber for production formatting.
 
 ## Reconciler audit
@@ -85,3 +85,28 @@ Unit tests for the `redact()` function and `ScrubLayer` are in
 ```sh
 cargo test log_scrub
 ```
+
+## Pipeline log checks (issue #1153)
+
+Runtime redaction alone is not enough for CI: pipeline commands (`make`,
+`cargo test`, kubectl dumps, shell helpers) can echo secrets into job logs
+and downloaded artifacts. The dedicated checker enforces that
+`log_scrub::redact` removes those patterns from representative pipeline log
+fixtures before CI goes green.
+
+```bash
+# Makefile entrypoint (same as CI)
+make check-pipeline-log-redaction
+
+# Shell wrapper
+./scripts/check-pipeline-log-redaction.sh
+
+# Include an extra captured job log
+./scripts/check-pipeline-log-redaction.sh \
+  --fixture tests/fixtures/pipeline_logs/dirty-ci-sample.txt
+
+# Scrub a captured log to stdout
+./scripts/check-pipeline-log-redaction.sh --scrub /tmp/job.log
+```
+
+CI job: `pipeline-log-redaction` in `.github/workflows/ci.yml`.

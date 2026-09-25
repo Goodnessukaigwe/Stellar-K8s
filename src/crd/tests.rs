@@ -1,3 +1,15 @@
+// Copyright 2024 Stellar-K8s Contributors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //! Unit tests for StellarNodeSpec validation
 //!
 //! Tests the `StellarNodeSpec::validate()` function to ensure it correctly
@@ -1355,8 +1367,6 @@ mod stellar_node_spec_validation {
 
         let config = SorobanConfig {
             stellar_core_url: "http://core:11626".to_string(),
-            #[allow(deprecated)]
-            captive_core_config: None,
             captive_core_structured_config: Some(CaptiveCoreConfig {
                 network_passphrase: Some("Test SDF Network ; September 2015".to_string()),
                 history_archive_urls: vec![
@@ -1370,7 +1380,7 @@ mod stellar_node_spec_validation {
             }),
             enable_preflight: true,
             max_events_per_request: 10000,
-            cache_config: None,
+            ..Default::default()
         };
 
         // Test JSON serialization

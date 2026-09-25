@@ -477,7 +477,6 @@ Before opening a support issue, collect:
 - [ ] `kubectl get events -n <namespace> --sort-by='.lastTimestamp'`
 - [ ] Operator logs: `kubectl logs deployment/stellar-operator -n stellar-system --tail=200`
 - [ ] Validator pod logs: `kubectl logs <validator-pod> -n <namespace> --tail=200`
-- [ ] Output of `scripts/debug-network.sh` (see below)
 
 ---
 
@@ -488,4 +487,3 @@ Before opening a support issue, collect:
 - [mTLS Guide](../mtls-guide.md)
 - [MetalLB BGP Anycast](../metallb-bgp-anycast.md)
 - [NetworkPolicy examples](../gatekeeper-policies.md)
-- [Diagnostic script](../../scripts/debug-network.sh)

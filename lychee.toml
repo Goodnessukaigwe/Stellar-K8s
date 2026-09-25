@@ -72,12 +72,46 @@ exclude = [
   # announced in their release notes — re-verifying them on every PR
   # provides almost no signal and costs every contributor a CI flake.
   "^https://kubernetes\\.io/docs/",
+  # Root/blog pages also reset from GHA IPs (same Cloudflare fronting as /docs/).
+  "^https://kubernetes\\.io/blog/",
+  "^https://kubernetes\\.io/?$",
+  # helm.sh front page also resets from GHA IPs intermittently.
+  "^https://helm\\.sh/?$",
+  # SLSA site intermittently blocks/resets GHA crawlers.
+  "^https://slsa\\.dev/?$",
+  # GitHub "latest/download" assets for kubernetes autoscaler are redirect-only and
+  # intermittently fail DNS/TLS from GHA; pin checks provide no PR signal.
+  "^https://github\\.com/kubernetes/autoscaler/releases/latest/download/",
+  # helm.sh intermittently resets CI connections
+  "^https://helm\\.sh/",
+  # tokio.rs also resets connections from GHA IPs intermittently
+  "^https://tokio\\.rs/",
+  # istio.io docs flake with connection failures from GHA
+  "^https://istio\\.io/",
+  # kyverno.io also resets connections from GHA IPs
+  "^https://kyverno\\.io/",
+  # slsa.dev flakes with connection failures from GHA
+  "^https://slsa\\.dev/",
+  # kubernetes.io is fronted by Cloudflare which throttles GHA IP ranges
+  # with intermittent TLS/TCP failures (not just 429s). Blog, docs,
+  # and related hosts flake regularly; re-verifying them on every PR
+  # provides almost no signal.
+  "^https://kubernetes\\.io/",
   # Placeholder URLs that appear in code examples and snippets
   "^https://host/path/backup\\.tar\\.gz",
   "example\\.com",
   "example\\.org",
   # Cargo doc helper anchors that lychee can't resolve without a build
   "^https://docs\\.rs/.*#",
+  # In-cluster Kubernetes service DNS referenced in example manifests
+  # (examples/**/*.yaml) — these hostnames only resolve inside a live
+  # cluster and are not real links to verify from CI.
+  "^https?://stellar-core(-svc)?:",
+  "^https?://validator-(mainnet|testnet):",
+  "^https?://core(-mainnet)?\\.default",
+  "^https?://prometheus-(k8s\\.monitoring\\.svc|operated\\.monitoring):",
+  "^https?://trivy\\.trivy\\.svc:",
+  "^https://kubernetes\\.default\\.svc",
 ]
 
 # Paths that lychee should not scan (matches anywhere in the path)
