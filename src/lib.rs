@@ -93,6 +93,10 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 pub mod api_gateway;
+pub mod approval;
+pub mod cardinality;
+pub mod latency;
+pub mod namespace_security;
 pub mod backup;
 pub mod benchmark_bisect;
 pub mod benchmark_compare;
