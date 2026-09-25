@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+## Chart v2.2.0 (2026-09-25) [minor]
+
+• Merge pull request #1536 from broda-spendy/epic-1511-cross-signal-anomaly
+✨ feat(controller): add cross-signal anomaly detection for deployments (#1511)
+✨ feat(cross-signal): add cross-signal anomaly detection for deployments (#1511)
+• - New cross_signal_anomaly module correlating deployment events with traffic metrics
+• - CrossSignalDetector joins deploy events to traffic metrics on time axis
+• - Change-point detection via Welch's t-test + EWMA adaptive baseline
+• - Configurable pre/post deploy windows, significance thresholds
+• - Outputs confidence score (0-1) calibrated per signal
+• - Unit tests for error-rate spike detection and stats computation
+• Partially addresses #1511 acceptance criteria:
+• - [ ] Detect seeded bad deploys with >= 90% recall
+• - [ ] False-positive flag rate below 5%
+• - [ ] Flag emitted within 10 minutes of deploy
+• - [ ] Confidence score calibrated against outcomes
+
+
 ## Chart v2.1.1 (2026-09-25) [patch]
 
 • Merge pull request #1539 from orunganiekan/fix/1513-1514-1515-1516-approvals-cardinality-latency-remediation
