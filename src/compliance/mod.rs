@@ -18,6 +18,7 @@
 pub mod audit_trail;
 pub mod dashboard;
 pub mod evidence;
+pub mod evidence_schedule;
 pub mod export;
 pub mod frameworks;
 pub mod monitor;

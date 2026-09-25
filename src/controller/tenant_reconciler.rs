@@ -210,7 +210,6 @@ async fn apply_network_policies(tenant_spec: &TenantSpec, client: &Client) -> Re
             egress: Some(vec![]), // Restrictive: no external traffic by default
             pod_selector: Default::default(),
         }),
-        ..Default::default()
     };
 
     let policy_name = format!("{}-isolation", tenant_id);
