@@ -3,6 +3,45 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+## Chart v2.1.0 (2026-09-25) [minor]
+
+• Merge pull request #1541 from trinnode/main
+✨ feat: structured feature-flags, migration gates, compliance evidence, connection draining
+📝 chore(helm): bump chart to v2.0.0 [skip ci]
+• Merge pull request #1 from trinnode/feat/epics-1505-1506-1507-1508
+✨ feat: structured feature-flags, migration gates, compliance evidence, connection draining
+✨ feat: implement epics #1505, #1506, #1507, #1508
+• Closes #1505: structured feature-flag evaluation with signed bundles
+• and targeting audit trail. Adds src/flag_bundle.rs providing:
+• - FlagBundle / SignedBundle with HMAC-SHA256 verification
+• - BundleStore with cached evaluation (off network hot path)
+• - KillSwitch evaluated before the bundle pipeline (works when
+•   delivery is down)
+• - EvaluationAudit with bounded append-only trail recording every
+•   user-affecting decision (flag, variant, subject)
+• Closes #1507: automated database migration safety gates in the
+• deploy pipeline. Adds src/migration_safety.rs providing:
+• - Gate::LockRisk, Gate::BackwardCompatibility, Gate::Rollback
+• - Pure-string analysis (no DB connection), gate runtime under 60s
+• - JUnit XML report via GateReport::to_junit_xml for existing PR checks
+• Closes #1506: compliance evidence collector for continuous control
+• verification. Adds src/compliance/evidence_schedule.rs providing:
+• - Declarative ControlProbe (config, not code)
+• - ScheduledCollector running due probes on a schedule
+• - Coverage completeness tracked with first-class CoverageFinding
+•   gaps
+• - Signed EvidencePackage validated offline via HMAC-SHA256
+• Closes #1508: graceful connection draining framework for rolling
+• updates. Adds src/connection_drain.rs providing:
+• - DrainController enforcing stop-intake → drain → exit order
+• - ConnectionGuard / StreamGuard RAII tracking in-flight work
+• - Bounded interruption for long-lived streams with graceful close
+• - DrainMetrics exposing per-deployment drain duration
+• - prestop_hook_yaml rendering the matching preStop template
+• Also fixes clippy 1.92 regressions in blue_green_core.rs,
+• tenant_reconciler.rs, and profiling.rs to restore CI parity.
+
+
 ## Chart v2.0.0 (2026-09-25) [major]
 
 
