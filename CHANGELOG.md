@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+## Chart v2.1.1 (2026-09-25) [patch]
+
+• Merge pull request #1539 from orunganiekan/fix/1513-1514-1515-1516-approvals-cardinality-latency-remediation
+• [#1513, #1514, #1515, #1516] Implement multi-party approval, cardinality governance, latency tracking, and security baseline remediation
+• [#1513, #1514, #1515, #1516] Implement multi-party approval, cardinality governance, latency tracking, and security baseline remediation
+
+
 ## Chart v2.1.0 (2026-09-25) [minor]
 
 • Merge pull request #1541 from trinnode/main
