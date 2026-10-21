@@ -1,5 +1,17 @@
 # Security Policy
 
+## Scope
+
+This security policy applies to the Stellar-K8s operator, its custom resource definitions (CRDs), Helm charts, and associated tooling. It covers vulnerabilities in:
+
+- The Rust operator binary and controller logic
+- Kubernetes manifests and Helm charts
+- Build and release pipelines
+- Dependency supply chain
+- Documentation and examples that could lead to insecure configurations
+
+Out of scope: Third-party Kubernetes clusters, underlying infrastructure, and user-deployed workloads not managed by the operator.
+
 ## Supported Versions
 
 | Version | Supported          |
@@ -181,4 +193,4 @@ securityContext:
 
 ---
 
-**Note**: This security policy is reviewed quarterly and updated as needed. Last updated: 2026-10-16
+**Note**: This security policy is reviewed quarterly and updated as needed. Last updated: 2026-10-21
