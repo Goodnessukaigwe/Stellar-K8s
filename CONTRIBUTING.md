@@ -364,6 +364,26 @@ is missing required keys (`name`, `description`, `body`), uses an unsupported
 
 - CRD YAML files follow the `stellar{feature}-crd.yaml` naming pattern under `config/crd/`.
 - Example manifests in `examples/` use descriptive, feature-based names — not issue numbers.
-- Generated manifests (CRDs, API reference, bundle) must be regenerated from their source before merg
+- Generated manifests (CRDs, API reference, bundle) must be regenerated from their source before merging.
 
-/* … truncated 3674 chars — edit only what you need near the top … */
+## 9. Getting Help
+
+If you need help with your contribution, here are the best places to ask:
+
+- **GitHub Discussions**: For questions about the project, design discussions, and general help
+- **Issue Tracker**: For bug reports and feature requests (use the appropriate template)
+- **PR Comments**: For questions about a specific pull request
+- **Codeowners**: Tag the relevant team via the [CODEOWNERS](.github/CODEOWNERS) file for path-specific questions
+
+### Before Asking
+
+1. Search existing issues and discussions for your question
+2. Check the [Troubleshooting Quick Links](#troubleshooting-quick-links) above
+3. Review the [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup and debugging guides
+4. Run `make health` and `make ci-local` to isolate local environment issues
+
+When asking for help, please include:
+- What you're trying to achieve
+- What you've tried so far
+- Any error messages (full output, not truncated)
+- Your environment (OS, Rust version, Kubernetes version, etc.)
