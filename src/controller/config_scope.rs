@@ -120,6 +120,10 @@ pub fn is_known_root_key(key: &str) -> bool {
 /// Marker comment inserted between the operator header and user content.
 const USER_SECTION_MARKER: &str = "# ---- user-supplied configuration (below) ----";
 
+/// Marker comment inserted between the user content and the generated network
+/// defaults.
+const GENERATED_SECTION_MARKER: &str = "# ---- generated network defaults (below) ----";
+
 /// An operator key that ended up nested inside a table instead of the root.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MisplacedKey {
@@ -193,14 +197,24 @@ pub struct OperatorHeader {
 
 impl OperatorHeader {
     /// Add a comment line to the header.
-    pub fn comment(&mut self, text: &str) -> &mut Self {
-        self.lines.push(format!("# {text}"));
+    pub fn comment(&mut self, text: impl AsRef<str>) -> &mut Self {
+        self.lines.push(format!("# {}", text.as_ref()));
         self
     }
 
     /// Add a `KEY=VALUE` line to the header.
     pub fn key_value(&mut self, key: &str, value: &str) -> &mut Self {
         self.lines.push(format!("{key}={value}"));
+        self
+    }
+
+    /// Add an already rendered assignment line to the header.
+    ///
+    /// Used for the generated network defaults, which are rendered by
+    /// [`crate::controller::network_defaults`] and must land at the document
+    /// root.
+    pub fn assignment(&mut self, line: &str) -> &mut Self {
+        self.lines.push(line.to_string());
         self
     }
 
@@ -237,8 +251,26 @@ pub fn declares_table_sections(user_cfg: &str) -> bool {
 /// marker comment so operators can still see where their settings stop and the
 /// user's own settings begin.
 pub fn assemble_config(header: &OperatorHeader, user_cfg: &str) -> String {
+    assemble_config_with_generated(header, user_cfg, "")
+}
+
+/// Assemble a `stellar-core.cfg` from an operator header, user content and
+/// generated network defaults.
+///
+/// The generated content is split in two:
+///
+/// * root keys belong to the header, so they are emitted before the user
+///   content and stay at the document root;
+/// * table sections are emitted after the user content, so the generated
+///   `[[VALIDATORS]]` blocks cannot capture the user's root keys.
+pub fn assemble_config_with_generated(
+    header: &OperatorHeader,
+    user_cfg: &str,
+    generated: &str,
+) -> String {
     let mut out = header.render();
     let user = user_cfg.trim_end_matches(['\n', '\r']);
+    let generated = generated.trim_end_matches(['\n', '\r']);
 
     if !user.trim().is_empty() {
         if !out.is_empty() {
@@ -247,6 +279,16 @@ pub fn assemble_config(header: &OperatorHeader, user_cfg: &str) -> String {
         out.push_str(USER_SECTION_MARKER);
         out.push('\n');
         out.push_str(user);
+        out.push('\n');
+    }
+
+    if !generated.trim().is_empty() {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(GENERATED_SECTION_MARKER);
+        out.push('\n');
+        out.push_str(generated);
         out.push('\n');
     }
 

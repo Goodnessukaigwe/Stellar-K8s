@@ -85,6 +85,7 @@ pub mod lifecycle_hooks;
 pub mod metrics;
 pub mod mtls;
 pub mod mtls_rotation;
+pub mod network_defaults;
 pub mod oci_snapshot;
 pub mod operator_config;
 pub mod ownership_registry;
@@ -232,7 +233,7 @@ pub use pss::{
     restricted_pod_security_context, validate_pss_compliance, PssViolation,
 };
 #[cfg(feature = "reconciler-fuzz")]
-pub use reconciler::reconcile_for_fuzzz;
+pub use reconciler::reconcile_for_fuzz;
 pub use reconciler::{run_controller, BatchSummaryReport, ControllerState};
 
 pub use service_mesh::{
