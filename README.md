@@ -7,7 +7,7 @@
 <!-- CI / Quality -->
 <p align="center">
   <a href="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/OtowoOrg/Stellar-K8s/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github" alt="CI Status" />
+    <img src="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
   </a>
   <a href="https://codecov.io/gh/OtowoOrg/Stellar-K8s">
     <img src="https://img.shields.io/codecov/c/github/OtowoOrg/Stellar-K8s/main?style=for-the-badge&logo=codecov" alt="Coverage" />
@@ -73,6 +73,19 @@
 **Stellar-K8s** is a high-performance Kubernetes Operator written in strict Rust using `kube-rs`. It automates the deployment, management, and scaling of **Stellar Core**, **Horizon**, and **Soroban RPC** nodes, bringing the power of Cloud-Native patterns to the Stellar ecosystem.
 
 Designed for high availability, type safety, and minimal footprint.
+
+## Documentation map
+
+| Topic | Where to start |
+| ----- | -------------- |
+| Full docs index | [docs/README.md](docs/README.md) |
+| Install and quick start | [Installation](docs/getting-started/installation.md), [Quick start](docs/getting-started/quick-start.md) |
+| Local development | [DEVELOPMENT.md](DEVELOPMENT.md) |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Product storyboards | [docs/pitch-storyboards.md](docs/pitch-storyboards.md) |
+| Example manifests | [examples/](examples/) |
+| Security disclosures | [SECURITY.md](SECURITY.md) |
+| CI pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 
 ---
 
@@ -144,13 +157,10 @@ See the [Docker Compose → Kubernetes Migration Guide](docs/docker-compose-to-k
 
 ### 1. Install the Operator via Helm
 
-```bash
-# Add the helm repo (example)
-helm repo add stellar-k8s https://stellar.github.io/stellar-k8s
-helm repo update
+Install from the chart in this repository (`charts/stellar-operator`). See the [Installation Guide](docs/getting-started/installation.md) for additional options.
 
-# Install the operator
-helm install stellar-operator stellar-k8s/stellar-operator \
+```bash
+helm install stellar-operator ./charts/stellar-operator \
   --namespace stellar-system \
   --create-namespace
 ```
@@ -750,6 +760,9 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
 
 <!-- handsoff-issue-1705 -->
 - #1705: [EPIC] bats coverage — added scripts/tests/secret-rotation-check.bats covering dry-run, argument parsing, error cases, and kubectl rotation flows.
+
+<!-- handsoff-issue-1762 -->
+- #1762: [EPIC] README update — added a documentation map, linked CONTRIBUTING and PITCH storyboards, corrected Helm install to the in-repo `charts/stellar-operator` chart, and kept the CI badge pointed at `.github/workflows/ci.yml`.
 
 <!-- handsoff-issue-1674 -->
 - #1674: [EPIC] CI badge status — CI badge verified against `.github/workflows/ci.yml`; links resolve to the workflow page.
