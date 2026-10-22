@@ -564,6 +564,41 @@ pub async fn ensure_config_map(
     Ok(())
 }
 
+/// The user-supplied `KNOWN_PEERS` fragment of a validator configuration.
+///
+/// `KNOWN_PEERS` is a root key, so it has to be rendered before any table the
+/// user declared; see [`join_user_sections`].
+fn known_peers_toml(node: &StellarNode) -> Option<String> {
+    node.spec
+        .validator_config
+        .as_ref()
+        .and_then(|config| config.known_peers.as_deref())
+        .map(str::trim)
+        .filter(|peers| !peers.is_empty())
+        .map(str::to_string)
+}
+
+/// Join the user supplied sections of a validator configuration.
+///
+/// The `KNOWN_PEERS` root key comes first, so it is not captured by a table
+/// header the user declared afterwards.
+fn join_user_sections(known_peers: Option<String>, quorum_set: Option<String>) -> String {
+    let mut sections: Vec<String> = Vec::new();
+
+    if let Some(peers) = known_peers {
+        sections.push(peers);
+    }
+
+    if let Some(quorum_set) = quorum_set {
+        let quorum_set = quorum_set.trim();
+        if !quorum_set.is_empty() {
+            sections.push(quorum_set.to_string());
+        }
+    }
+
+    sections.join("\n\n")
+}
+
 pub(crate) fn build_config_map(
     node: &StellarNode,
     quorum_override: Option<crate::controller::vsl::QuorumSet>,
@@ -591,10 +626,34 @@ pub(crate) fn build_config_map(
             // user content would silently disable mTLS, catch-up mode and
             // KNOWN_PEERS. See controller::config_scope.
             let user_cfg: String = match (&node.spec.validator_config, quorum_override) {
-                (Some(_), Some(qs)) => qs.to_stellar_core_toml(),
-                (Some(config), None) => config.quorum_set.clone().unwrap_or_default(),
+                (Some(_), Some(qs)) => {
+                    join_user_sections(known_peers_toml(node), Some(qs.to_stellar_core_toml()))
+                }
+                (Some(config), None) => {
+                    join_user_sections(known_peers_toml(node), config.quorum_set.clone())
+                }
                 _ => String::new(),
             };
+
+            // The network defaults fill in what the user did not provide: the
+            // network passphrase, the peer list and the quorum set of the
+            // selected network. See controller::network_defaults.
+            let generated = crate::controller::network_defaults::generate(
+                &crate::controller::network_defaults::GenerationRequest {
+                    network: &node.spec.network,
+                    custom_passphrase: node.spec.custom_network_passphrase.as_deref(),
+                    passphrase_in_secret: node.spec.passphrase_secret_ref.is_some(),
+                    user_config: &user_cfg,
+                },
+            );
+
+            for note in &generated.notes {
+                tracing::debug!(
+                    "StellarNode {}: network defaults: {}",
+                    node.name_any(),
+                    note
+                );
+            }
 
             let mut header = crate::controller::config_scope::OperatorHeader::default();
 
@@ -617,8 +676,22 @@ pub(crate) fn build_config_map(
                 }
             }
 
-            if !header.is_empty() || !user_cfg.trim().is_empty() {
-                let core_cfg = crate::controller::config_scope::assemble_config(&header, &user_cfg);
+            if !generated.root_keys.is_empty() {
+                let profile = crate::controller::network_defaults::NetworkProfile::for_network(
+                    &node.spec.network,
+                );
+                header.comment(format!("Network defaults ({})", profile.id()));
+                for line in &generated.root_keys {
+                    header.assignment(line);
+                }
+            }
+
+            if !header.is_empty() || !user_cfg.trim().is_empty() || !generated.is_empty() {
+                let core_cfg = crate::controller::config_scope::assemble_config_with_generated(
+                    &header,
+                    &user_cfg,
+                    &generated.render_table_sections(),
+                );
                 crate::controller::config_scope::log_config_scope_findings(
                     node.name_any().as_str(),
                     &core_cfg,
