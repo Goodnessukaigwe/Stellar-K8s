@@ -55,6 +55,9 @@
   <a href="https://m1s0g1.github.io/Stellar-K8s/">
     <img src="https://img.shields.io/badge/📖_Documentation-Online-blue?style=for-the-badge&logo=readthedocs" alt="Documentation Site" />
   </a>
+  <a href="CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/🤝_Contributing-Guide-informational?style=for-the-badge&logo=github" alt="Contributing Guide" />
+  </a>
   <a href="https://github.com/OtowoOrg/Stellar-K8s/issues/new/choose">
     <img src="https://img.shields.io/badge/🐛_Report_Issue-GitHub-orange?style=for-the-badge&logo=github" alt="Report Issue" />
   </a>
@@ -762,6 +765,9 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
 
 <!-- handsoff-issue-1675 -->
 - #1675: [EPIC] README update — refreshed cross-references (CONTRIBUTING, PITCH storyboards) and badge block.
+
+<!-- handsoff-issue-1763 -->
+- #1763: [EPIC] CONTRIBUTING docs — root `CONTRIBUTING.md` documents fork/PR flow, verified `make` targets, and CI workflow `.github/workflows/ci.yml`; README links to it.
 
 <!-- handsoff-issue-1676 -->
 - #1676: [EPIC] CONTRIBUTING docs — linked from the Contributing section above.
