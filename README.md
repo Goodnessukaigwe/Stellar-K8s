@@ -5,9 +5,10 @@
 # Stellar-K8s: Cloud-Native Stellar Infrastructure
 
 <!-- CI / Quality -->
+<!-- Official GitHub Actions badge (no branch query): tracks the repository default branch. -->
 <p align="center">
   <a href="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/OtowoOrg/Stellar-K8s/ci.yml?branch=main&style=for-the-badge&label=CI&logo=github" alt="CI Status" />
+    <img src="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
   </a>
   <a href="https://codecov.io/gh/OtowoOrg/Stellar-K8s">
     <img src="https://img.shields.io/codecov/c/github/OtowoOrg/Stellar-K8s/main?style=for-the-badge&logo=codecov" alt="Coverage" />
@@ -750,6 +751,9 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
 
 <!-- handsoff-issue-1705 -->
 - #1705: [EPIC] bats coverage — added scripts/tests/secret-rotation-check.bats covering dry-run, argument parsing, error cases, and kubectl rotation flows.
+
+<!-- handsoff-issue-1761 -->
+- #1761: [EPIC] CI badge status — README CI badge uses the official GitHub Actions URL for `.github/workflows/ci.yml` (default branch) and links to that workflow's runs page.
 
 <!-- handsoff-issue-1674 -->
 - #1674: [EPIC] CI badge status — CI badge verified against `.github/workflows/ci.yml`; links resolve to the workflow page.
