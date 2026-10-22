@@ -134,6 +134,7 @@ pub mod deployment_strategy;
 pub mod error;
 
 pub mod error_budget;
+pub mod egress_synthesis;
 pub mod event_processing;
 pub mod fair_share_rate_limiter;
 pub mod fair_share_scheduler;
@@ -170,6 +171,7 @@ pub mod runbook;
 pub mod scheduler;
 pub mod schema_evolution;
 pub mod schema_registry;
+pub mod registry_pruning;
 pub mod sdk;
 pub mod sla;
 pub mod secrets_broker;

@@ -121,6 +121,7 @@ Production-grade Stellar infrastructure on Kubernetes. This directory contains a
 - [Regenerating Charts & Bundle Manifests](development/regeneration-guide.md)
 - [Fuzzing](fuzzing.md)
 - [Docker Compose → Kubernetes Migration](docker-compose-to-kubernetes-migration.md)
+- [First-Class Issue Types](first-class-issues.md)
 
 ## Reference
 

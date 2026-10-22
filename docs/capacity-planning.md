@@ -118,6 +118,30 @@ Key parameters:
 
 ---
 
+## Configuration File
+
+The forecast parameters, the forecast dimensions, the operator sizing table
+and the ledger growth assumptions are also kept in a reviewable file,
+`config/capacity-planning.yaml`:
+
+```bash
+make capacity-plan          # validate the configuration and print a summary
+make capacity-plan-check    # validate the configuration only
+```
+
+`make capacity-plan` prints the parameters in use, the forecast dimensions,
+the operator resource requests per managed `StellarNode` count, the ledger
+growth assumptions, and the alert thresholds that follow from
+`minLeadTimeDays`. The target exits non-zero when a value is out of range
+(for example a lookback window shorter than the minimum history, or a
+`minLeadTimeDays` larger than the horizon), so it can be used as a
+configuration gate in CI.
+
+The file mirrors the defaults documented above. Change a value there, then
+document the change in this page so the two stay in sync.
+
+---
+
 ## Recommendation Priorities
 
 | Priority | Condition |
@@ -239,6 +263,10 @@ stellar-operator capacity-forecast \
 
 The command publishes a `CapacityRecommendationReport` CR and exits. Use
 `--dry-run` to print the report without writing to the cluster.
+
+The forecast parameters used by the command come from
+`config/capacity-planning.yaml`; run
+`make capacity-plan` to review them without touching a cluster.
 
 ---
 

@@ -93,7 +93,7 @@ If your PR contains multiple logical changes, split it into separate branches an
 Changes to `main` must go through a pull request. The `main` branch protection rule should require:
 
 - A pull request before merging.
-- Passing status checks before merging: `ci / build`, `ci / test`, `ci / security-audit`.
+- Passing status checks from the primary workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (`CI/CD Pipeline`). Common jobs include **Lint & Format** (`lint`), **Test** (`test`), and **Security Audit** (`security-audit`, skipped when dependency files are unchanged). Do not treat a job named `build` as required; that job is not defined in `ci.yml`.
 
 See [Dependency Update Process](docs/dependency-update-process.md#branch-protection-prerequisites) for the full list of settings that auto-merge depends on.
 
@@ -316,6 +316,33 @@ is missing required keys (`name`, `description`, `body`), uses an unsupported
 `body` field type, or has a malformed `config.yml`. It is also part of
 `make health`.
 
+## How CI validates contributions
+
+Every pull request against `main` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Path filters skip some jobs when the corresponding files did not change. Before you open a PR, run the matching local targets:
+
+| Local command | What it covers (Makefile) |
+| ------------- | ------------------------- |
+| `make quick` | `fmt-check` |
+| `make fmt` / `make fmt-check` | rustfmt |
+| `make lint` | clippy with workspace feature flags |
+| `make test` | cargo test suite |
+| `make codespell` | same spell-check as the CI `codespell` job |
+| `make shellcheck` | shell scripts |
+| `make test-bats` | bats suites under `scripts/tests/` (except helm-drift) |
+| `make health` | format, lint, tests, and docs gates |
+| `make ci-local` | `fmt-check` + `lint` + `audit` + `test` + `build` + `issue-template-lint` + `test-bats` |
+| `make nav-coverage` | every `mkdocs.yml` nav path exists |
+| `make docs-ci-build` | `mkdocs build --strict` |
+
+Confirm a target exists with `make help` before documenting a new command.
+
+## Reporting defects and documentation-only changes
+
+- Use the [issue templates](https://github.com/OtowoOrg/Stellar-K8s/issues/new/choose) for bugs, features, epics, and support requests.
+- Security reports follow [SECURITY.md](SECURITY.md).
+- Documentation PRs still need passing CI. If you change `docs/**` or `mkdocs.yml`, run `make nav-coverage` and `make docs-ci-build`, and add the page to `mkdocs.yml` when you add a new doc.
+- Keep documentation PRs focused; do not mix unrelated code changes.
+
 ## 8. Coding Standards
 
 - Format Rust code with `make fmt`.
@@ -364,6 +391,26 @@ is missing required keys (`name`, `description`, `body`), uses an unsupported
 
 - CRD YAML files follow the `stellar{feature}-crd.yaml` naming pattern under `config/crd/`.
 - Example manifests in `examples/` use descriptive, feature-based names — not issue numbers.
-- Generated manifests (CRDs, API reference, bundle) must be regenerated from their source before merg
+- Generated manifests (CRDs, API reference, bundle) must be regenerated from their source before merging.
 
-/* … truncated 3674 chars — edit only what you need near the top … */
+## 9. Getting Help
+
+If you need help with your contribution, here are the best places to ask:
+
+- **GitHub Discussions**: For questions about the project, design discussions, and general help
+- **Issue Tracker**: For bug reports and feature requests (use the appropriate template)
+- **PR Comments**: For questions about a specific pull request
+- **Codeowners**: Tag the relevant team via the [CODEOWNERS](.github/CODEOWNERS) file for path-specific questions
+
+### Before Asking
+
+1. Search existing issues and discussions for your question
+2. Check the [Troubleshooting Quick Links](#troubleshooting-quick-links) above
+3. Review the [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup and debugging guides
+4. Run `make health` and `make ci-local` to isolate local environment issues
+
+When asking for help, please include:
+- What you're trying to achieve
+- What you've tried so far
+- Any error messages (full output, not truncated)
+- Your environment (OS, Rust version, Kubernetes version, etc.)

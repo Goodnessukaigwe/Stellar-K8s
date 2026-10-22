@@ -10,6 +10,40 @@ vary by region, reserved/spot discounts, and workload profile.
 
 ---
 
+## Programmatic estimate
+
+The tables on this page are backed by a machine-readable pricing model in
+`config/cost-estimate.yaml`. The
+`make cost-estimate` target reads that model and prints the estimate, so the
+documentation and the tooling always agree:
+
+```bash
+make cost-estimate                              # every profile
+make cost-estimate-check                        # validate the model only
+python3 scripts/cost-estimate.py --profile mainnet-ha
+python3 scripts/cost-estimate.py --discount reserved1y
+python3 scripts/cost-estimate.py --format json  # machine-readable output
+```
+
+`make cost-estimate` prints the same compute and storage split as the tables
+below, plus the profile total. The reference tables are rounded; the tool
+prints two decimals. The `--discount` flag applies one of the savings
+strategies listed in the model (`reserved1y`, `savingsPlan`, `spot`) to the
+compute portion of the estimate.
+
+To model a different deployment, copy the model, edit the component list, and
+point the script at it:
+
+```bash
+python3 scripts/cost-estimate.py --config config/cost-estimate.yaml
+```
+
+The script exits non-zero when the model is invalid (missing component, count
+below one, negative price, or an unknown profile or discount), so it can be
+used as a configuration gate in CI.
+
+---
+
 ## Node Type Reference
 
 | Node Type    | Typical Instance | vCPU | RAM   | Storage (EBS gp3) |

@@ -23,6 +23,14 @@ Select the template that best matches your report:
 | **Maintenance / chore** | Dependency bumps, refactors, CI improvements |
 | **Support / question** | You're stuck and need guidance |
 
+Each template is a *first-class issue type* with a fixed title prefix and a
+fixed set of labels. The mapping is declared in
+[`.github/issue-types.yml`](https://github.com/OtowoOrg/Stellar-K8s/blob/main/.github/issue-types.yml)
+and validated in CI, so the tracker, the labels, and the automation that reads
+them never drift apart. See
+[First-Class Issue Types](first-class-issues.md) for the full table and for
+how to add a new type.
+
 ## Before opening an issue
 
 1. Search [existing issues](https://github.com/OtowoOrg/Stellar-K8s/issues) — your problem may already be tracked.

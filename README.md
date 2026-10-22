@@ -5,6 +5,7 @@
 # Stellar-K8s: Cloud-Native Stellar Infrastructure
 
 <!-- CI / Quality -->
+<!-- Official GitHub Actions badge (no branch query): tracks the repository default branch. -->
 <p align="center">
   <a href="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/ci.yml">
     <img src="https://github.com/OtowoOrg/Stellar-K8s/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
@@ -54,6 +55,9 @@
   <a href="https://m1s0g1.github.io/Stellar-K8s/">
     <img src="https://img.shields.io/badge/📖_Documentation-Online-blue?style=for-the-badge&logo=readthedocs" alt="Documentation Site" />
   </a>
+  <a href="CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/🤝_Contributing-Guide-informational?style=for-the-badge&logo=github" alt="Contributing Guide" />
+  </a>
   <a href="https://github.com/OtowoOrg/Stellar-K8s/issues/new/choose">
     <img src="https://img.shields.io/badge/🐛_Report_Issue-GitHub-orange?style=for-the-badge&logo=github" alt="Report Issue" />
   </a>
@@ -86,6 +90,7 @@ Designed for high availability, type safety, and minimal footprint.
 | Example manifests | [examples/](examples/) |
 | Security disclosures | [SECURITY.md](SECURITY.md) |
 | CI pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+Want the problem statement, users, and journeys in one place? See the **[PITCH storyboards](docs/pitch-storyboards.md)** (implemented vs proposed capabilities are labeled there).
 
 ---
 
@@ -763,6 +768,8 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
 
 <!-- handsoff-issue-1762 -->
 - #1762: [EPIC] README update — added a documentation map, linked CONTRIBUTING and PITCH storyboards, corrected Helm install to the in-repo `charts/stellar-operator` chart, and kept the CI badge pointed at `.github/workflows/ci.yml`.
+<!-- handsoff-issue-1761 -->
+- #1761: [EPIC] CI badge status — README CI badge uses the official GitHub Actions URL for `.github/workflows/ci.yml` (default branch) and links to that workflow's runs page.
 
 <!-- handsoff-issue-1674 -->
 - #1674: [EPIC] CI badge status — CI badge verified against `.github/workflows/ci.yml`; links resolve to the workflow page.
@@ -770,8 +777,14 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
 <!-- handsoff-issue-1675 -->
 - #1675: [EPIC] README update — refreshed cross-references (CONTRIBUTING, PITCH storyboards) and badge block.
 
+<!-- handsoff-issue-1763 -->
+- #1763: [EPIC] CONTRIBUTING docs — root `CONTRIBUTING.md` documents fork/PR flow, verified `make` targets, and CI workflow `.github/workflows/ci.yml`; README links to it.
+
 <!-- handsoff-issue-1676 -->
 - #1676: [EPIC] CONTRIBUTING docs — linked from the Contributing section above.
+
+<!-- handsoff-issue-1764 -->
+- #1764: [EPIC] PITCH storyboards — product storyboards in `docs/pitch-storyboards.md` (Mermaid + tables); linked from the README intro and Contributing section.
 
 <!-- handsoff-issue-1677 -->
 - #1677: [EPIC] PITCH storyboards — linked from the Contributing section above (`docs/PITCH.md`).

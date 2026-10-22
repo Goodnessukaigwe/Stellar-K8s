@@ -794,6 +794,13 @@ pub struct ValidatorConfig {
     /// Known peers configuration as TOML string (KNOWN_PEERS)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub known_peers: Option<String>,
+    /// Health sidecar image override.
+    ///
+    /// When set, the operator uses this image verbatim for the health sidecar
+    /// instead of deriving `ghcr.io/stellar/stellar-k8s:{version}` from the
+    /// operator version.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sidecar_image: Option<String>,
     /// Enable history archive for this validator
     #[serde(default)]
     pub enable_history_archive: bool,

@@ -359,8 +359,9 @@ mod seed_env_dedupe {
                 prop_assert_eq!(
                     unique.len(),
                     names.len(),
-                    "duplicate env var names rendered in {}: {names:?}",
-                    container.name
+                    "duplicate env var names rendered in {}: {:?}",
+                    container.name,
+                    names
                 );
             }
 

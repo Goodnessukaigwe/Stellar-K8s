@@ -502,6 +502,18 @@ make crd-gen       # Generate CRDs from Rust types
 make regenerate    # Regenerate all derived artifacts (CRDs, API docs, OLM bundle)
 ```
 
+### GitOps, Cost, and Capacity
+
+```bash
+make flux-validate          # Render and validate the Flux manifests in examples/flux
+make flux-sync KUSTOMIZATION=<name>  # Reconcile a Flux Kustomization (add NAMESPACE=<ns>)
+make cost-estimate          # Print the monthly cost estimate per deployment profile
+make cost-estimate-check    # Validate the cost model in config/cost-estimate.yaml
+make capacity-plan          # Summarise the capacity planning configuration
+make capacity-plan-check    # Validate config/capacity-planning.yaml
+make issue-types-check      # Validate the first-class issue type registry
+```
+
 ### Running the Operator
 
 ```bash

@@ -51,6 +51,10 @@
 	check-pipeline-log-redaction \
 	license-headers check-license-headers \
 	argocd-sync \
+	flux-sync flux-validate \
+	cost-estimate cost-estimate-check \
+	capacity-plan capacity-plan-check \
+	issue-types-check \
 	check-api-contract check-api-coverage check-breaking-changes \
 	crd-benchmark \
 	compliance-test \
@@ -589,6 +593,54 @@ helm-lint: ## Strict Helm lint check (warnings fail)
 argocd-sync: ## Sync an ArgoCD application (requires APP=<application>)
 	@test -n "$(APP)" || { echo "usage: make argocd-sync APP=<application>"; exit 1; }
 	argocd app sync "$(APP)"
+
+# ── Issue #1833: Flux CD sync ────────────────────────────────────────────────
+
+flux-sync: ## Sync a Flux Kustomization (requires KUSTOMIZATION=<name> [NAMESPACE=<ns>])
+	@test -n "$(KUSTOMIZATION)" || { echo "usage: make flux-sync KUSTOMIZATION=<name> [NAMESPACE=<namespace>]"; exit 1; }
+	@command -v flux >/dev/null 2>&1 || { echo "the flux CLI is required (https://fluxcd.io/flux/guides/install-flux-cli/)"; exit 1; }
+	flux reconcile kustomization "$(KUSTOMIZATION)" $(if $(NAMESPACE),--namespace "$(NAMESPACE)",)
+
+flux-validate: ## Render and validate the Flux manifests under examples/flux (#1833)
+	@echo "→ Validating Flux manifests..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required to render the Flux manifests"; exit 1; }
+	@kubectl kustomize examples/flux > /dev/null
+	@if command -v flux >/dev/null 2>&1; then \
+		flux build kustomization examples/flux > /dev/null; \
+		echo "✓ Flux kustomization builds cleanly"; \
+	else \
+		echo "• flux CLI not installed - skipped 'flux build' (see docs/gitops/flux.md)"; \
+	fi
+	@echo "✓ Flux manifests validated"
+
+# ── Issue #1834: cost estimate ───────────────────────────────────────────────
+
+cost-estimate: ## Print the monthly cost estimate for the configured profiles (#1834)
+	@echo "→ Estimating monthly cost..."
+	@python3 scripts/cost-estimate.py
+
+cost-estimate-check: ## Validate the cost estimate configuration (config/cost-estimate.yaml) (#1834)
+	@echo "→ Validating cost estimate configuration..."
+	@python3 scripts/cost-estimate.py --check
+	@echo "✓ Cost estimate configuration is valid"
+
+# ── Issue #1835: capacity planning ──────────────────────────────────────────
+
+capacity-plan: ## Summarise the capacity planning configuration (#1835)
+	@echo "→ Summarising capacity plan..."
+	@python3 scripts/capacity-plan.py
+
+capacity-plan-check: ## Validate the capacity planning configuration (config/capacity-planning.yaml) (#1835)
+	@echo "→ Validating capacity planning configuration..."
+	@python3 scripts/capacity-plan.py --check
+	@echo "✓ Capacity planning configuration is valid"
+
+# ── Issue #1836: first-class issue types ────────────────────────────────────
+
+issue-types-check: ## Validate the first-class issue type registry (#1836)
+	@echo "→ Validating first-class issue type registry..."
+	@python3 scripts/issue_template_lint.py --registry-only
+	@echo "✓ First-class issue type registry is valid"
 
 dev-setup: ## Setup dev environment
 	rustup update stable
