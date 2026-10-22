@@ -13,6 +13,17 @@ This folder contains declarative Flux CD manifests for deploying Stellar-K8s.
 2. Add this repository as a Flux `GitRepository` source.
 3. Apply `kustomization.yaml` (or commit it to your GitOps repository and let Flux reconcile it).
 
+## Sync and validation
+
+- `make flux-validate` renders these manifests with `kubectl kustomize` and
+  `flux build kustomization examples/flux`. It needs no cluster and runs in
+  the `Flux Sync` CI workflow on every pull request.
+- `make flux-sync KUSTOMIZATION=<name> [NAMESPACE=<namespace>]` requests a
+  reconciliation from the terminal against a bootstrapped cluster.
+- `make flux-sync` without `KUSTOMIZATION` fails fast and prints the usage.
+
+See [docs/gitops/flux.md](../../docs/gitops/flux.md) for the full guide including finalizer handling and multi-cluster patterns.
+
 ## Notes
 
 - The `HelmRelease` resources use `dependsOn` to ensure the operator is installed before workload releases are reconciled.

@@ -121,7 +121,7 @@ jobs:
           # only checks Kubernetes/config manifests, so the GitHub Issue Form
           # schema needs its own gate (see the `issue-template-lint` job).
           echo "issue_templates=$(_match \
-            '^(\.github/ISSUE_TEMPLATE/|scripts/issue_template_lint\.py)')" \
+            '^(\.github/ISSUE_TEMPLATE/|\.github/issue-types\.yml|scripts/issue_template_lint\.py)')" \
             >> "$GITHUB_OUTPUT"
           echo "scripts=$(_match \
             '^(scripts/|Makefile|CONVENTIONS\.md)')" \
@@ -337,6 +337,11 @@ jobs:
 
       - name: Lint issue templates
         run: make issue-template-lint
+
+      - name: Validate first-class issue type registry
+        # The registry (.github/issue-types.yml) maps every first-class issue
+        # type to its GitHub Issue Form, title prefix, and labels (#1836).
+        run: make issue-types-check
 
   # ── 2.65. Bats Suites (#1680) ───────────────────────────────────────────────
   # Runs every scripts/tests/*.bats suite via `make test-bats` so suites without

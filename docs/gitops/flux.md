@@ -150,6 +150,53 @@ The `stellarCoreUrl` is an in-cluster service endpoint. In a multi-cluster HA
 layout, make this endpoint a declaratively managed cross-cluster DNS name and
 give each cluster its own `HelmRelease`.
 
+## 5. Automate and verify the sync
+
+The examples in `examples/flux/` are rendered and validated in CI by the
+`Flux Sync` workflow, so a broken manifest fails the pull request instead of
+the next production sync. The same check runs locally:
+
+```bash
+make flux-validate
+```
+
+The target renders the kustomization with `kubectl kustomize` and, when the
+`flux` CLI is installed, with `flux build kustomization examples/flux`.
+Neither command needs a cluster.
+
+To request a reconciliation from the terminal against a bootstrapped cluster,
+run:
+
+```bash
+make flux-sync KUSTOMIZATION=stellar-k8s
+```
+
+The target requires an explicit Kustomization name and uses the currently
+configured Flux context. Pass `NAMESPACE=<namespace>` when the
+`Kustomization` is not in `flux-system`:
+
+```bash
+make flux-sync KUSTOMIZATION=stellar-k8s NAMESPACE=flux-system
+```
+
+The equivalent manual commands are:
+
+```bash
+flux reconcile kustomization stellar-k8s --namespace flux-system
+flux get kustomizations --all-namespaces
+```
+
+Prefer `flux reconcile` over `kubectl apply` for anything that Flux already
+owns: a manual `apply` is overwritten by the next reconciliation and leaves the
+cluster drifting from Git.
+
+### Reconciliation interval and drift
+
+The `GitRepository` polls every minute and the `HelmRelease` resources every
+ten minutes. A shorter interval reacts faster to a bad merge but increases
+the load on the Git provider. When a release is reconciled out of band, Flux
+re-applies the Git state and removes the manual change on the next interval.
+
 ## Finalizers, deletion, and PVC lifecycle
 
 Stellar-K8s uses a kube-rs finalizer on each `StellarNode`:
@@ -216,4 +263,6 @@ inputs:
 
 For more details on the kube-rs finalizer design, see
 [`docs/adr/0003-kube-rs-finalizers.md`](../adr/0003-kube-rs-finalizers.md).
-For the ArgoCD equivalent of this guide, see [`docs/gitops/argocd.mdx`](argocd.mdx).
+For the ArgoCD equivalent of this guide, see
+[`docs/gitops/argocd.md`](argocd.md) (and its rendered variant
+[`docs/gitops/argocd.mdx`](argocd.mdx)).
