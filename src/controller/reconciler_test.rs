@@ -139,6 +139,7 @@ VALIDATORS=["VALIDATOR1", "VALIDATOR2"]"#
                     external_dns: None,
                     known_peers: None,
                     quorum_optimization: None,
+                    sidecar_image: None,
                 }),
                 horizon_config: None,
                 soroban_config: None,
