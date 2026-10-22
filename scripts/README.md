@@ -52,7 +52,7 @@ Related documentation:
 
 | Script | Purpose | Invocation | Tests |
 |---|---|---|---|
-| [`issue_template_lint.py`](issue_template_lint.py) | Lints GitHub Issue Forms in `.github/ISSUE_TEMPLATE/`: required keys, `body` field types, and `config.yml` shape. | `make issue-template-lint` (`python3 scripts/issue_template_lint.py`) | — |
+| [`issue_template_lint.py`](issue_template_lint.py) | Lints GitHub Issue Forms in `.github/ISSUE_TEMPLATE/`: required keys, `body` field types, and `config.yml` shape. Also validates the first-class issue type registry in `.github/issue-types.yml` (every form registered, labels and title prefixes in sync). | `make issue-template-lint`, `make issue-types-check` (`python3 scripts/issue_template_lint.py [--registry-only]`) | - |
 | [`check-shell-safety.py`](check-shell-safety.py) | Static analysis gate for unsafe shell patterns (unguarded `rm -rf`, `eval`, `curl \| bash`, missing strict mode). | `make shell-safety`, `make test-shell-safety` | [`tests/test_check_shell_safety.py`](tests/test_check_shell_safety.py) |
 | [`check-secrets.sh`](check-secrets.sh) | Secret-handling audit across the repository; `--report` never fails. | `bash scripts/check-secrets.sh [--report]` | — |
 | [`trivy-fs.sh`](trivy-fs.sh) | Local Trivy filesystem + IaC scan mirroring the `vulnerability-scan.yml` CI jobs; advisory only, never fails the build. Needs `trivy`. | `bash scripts/trivy-fs.sh [--severity HIGH,CRITICAL] [--fs-only\|--config-only]` | — |
@@ -118,7 +118,14 @@ Related documentation:
 | [`soak-test.sh`](soak-test.sh) | Long-running stability test: samples operator memory over `SOAK_DURATION` seconds and fails on RSS growth beyond the threshold. Needs a cluster. | `OPERATOR_NAMESPACE=stellar-system SOAK_DURATION=3600 ./scripts/soak-test.sh` | — |
 | [`run-chaos-drill.sh`](run-chaos-drill.sh) | Runs a single chaos drill (`DRILL_TYPE`, `DURATION`, `TARGET`, `NAMESPACE`, or the same values as positional arguments) and writes a JSON result. Needs a cluster. | `./scripts/run-chaos-drill.sh node-kill 60 validator stellar-chaos` | — |
 | [`migrate-seed-key.sh`](migrate-seed-key.sh) | Migrates Kubernetes secrets using legacy `SEED` key to include standardized `STELLAR_CORE_SEED`. | `scripts/migrate-seed-key.sh [--dry-run] <namespace> <secret-name>`, `scripts/migrate-seed-key.sh [--dry-run] --all <namespace>` | — |
-| [`aggregate-chaos-results.sh`](aggregate-chaos-results.sh) | Aggregates recorded drill results into `RESULTS.md`; exits non-zero if a drill missed its RTO target. | `./scripts/aggregate-chaos-results.sh [results-dir]` | — |
+| [`aggregate-chaos-results.sh`](aggregate-chaos-results.sh) | Aggregates recorded drill results into `RESULTS.md`; exits non-zero if a drill missed its RTO target. | `./scripts/aggregate-chaos-results.sh [results-dir]` | - |
+
+## Cost and capacity planning
+
+| Script | Purpose | Invocation | Tests |
+|---|---|---|---|
+| [`cost-estimate.py`](cost-estimate.py) | Computes the monthly cost estimate per deployment profile from the pricing model in `config/cost-estimate.yaml`; `--check` validates the model, `--profile` selects a profile, `--discount` applies a savings strategy, `--format json` emits machine-readable output. | `make cost-estimate`, `make cost-estimate-check`, `python3 scripts/cost-estimate.py [--config PATH] [--profile NAME] [--discount NAME] [--format table\|json] [--check]` | - |
+| [`capacity-plan.py`](capacity-plan.py) | Validates the capacity planning configuration in `config/capacity-planning.yaml` (forecast parameters, dimensions, operator sizing, ledger growth) and prints a summary with the resulting alert thresholds. | `make capacity-plan`, `make capacity-plan-check`, `python3 scripts/capacity-plan.py [--config PATH] [--format table\|json] [--check]` | - |
 
 ## CI-only scripts (`scripts/ci/`)
 

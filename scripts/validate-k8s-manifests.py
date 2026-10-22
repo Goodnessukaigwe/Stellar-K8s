@@ -28,6 +28,11 @@ NON_K8S_YAML_EXCLUDES = [
     "config/yaml-validation.yaml",
     "config/stellar-bench.yaml",
     "config/shell-safety.yaml",
+    # Cost and capacity planning models (issues #1834, #1835). They are plain
+    # configuration consumed by scripts/cost-estimate.py and
+    # scripts/capacity-plan.py, not Kubernetes API objects.
+    "config/cost-estimate.yaml",
+    "config/capacity-planning.yaml",
 ]
 
 # Fragments starting with underscore are partial YAML snippets.

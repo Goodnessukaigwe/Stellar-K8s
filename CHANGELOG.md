@@ -28,6 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 • Cost estimate reference document added at `docs/cost-estimate.md` with AWS on-demand and HA pricing tables for Testnet and Mainnet deployments (#1732).
 • Capacity planning documentation added at `docs/capacity-planning.md` covering the `CapacityRecommendationReport` CRD, forecasting models, Prometheus metrics, alerting rules, and sizing reference; registered in `mkdocs.yml` under Operations & Observability (#1733).
 • ArgoCD GitOps golden-path guide added at `docs/gitops/argocd.md`; registered in `mkdocs.yml` under GitOps alongside the existing Flux guide (#1730).
+• `make flux-sync` and `make flux-validate` targets, a `Flux Sync` CI workflow that renders `examples/flux` with `kubectl kustomize` and `flux build`, and a sync automation section in `docs/gitops/flux.md` (#1833).
+• Cost estimate pricing model at `config/cost-estimate.yaml` with the `make cost-estimate` and `make cost-estimate-check` targets and the `scripts/cost-estimate.py` tool; documented in `docs/cost-estimate.md` (#1834).
+• Capacity planning configuration at `config/capacity-planning.yaml` with the `make capacity-plan` and `make capacity-plan-check` targets and the `scripts/capacity-plan.py` tool; documented in `docs/capacity-planning.md` (#1835).
+• First-class issue type registry at `.github/issue-types.yml`, registry validation in `scripts/issue_template_lint.py` with the `make issue-types-check` target, and the `docs/first-class-issues.md` guide registered in `mkdocs.yml` (#1836).
 
 ### Fixed
 

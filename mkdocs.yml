@@ -399,6 +399,7 @@ nav:
     - Documentation Standards: contributing/code-standards.md
     - Developer Onboarding: developer-onboarding/index.md
     - Report an Issue: issue-reporting.md
+    - First-Class Issue Types: first-class-issues.md
     - Change Notes: change-notes.md
   - Reference:
     - FAQ: faq.md

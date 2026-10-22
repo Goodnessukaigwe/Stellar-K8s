@@ -5,13 +5,19 @@ scripts/issue_template_lint.py
 Lints GitHub issue templates and verifies metadata consistency across `.github/ISSUE_TEMPLATE/`.
 Used in CI and repository health checks.
 
+It also validates the first-class issue type registry in `.github/issue-types.yml`
+(issue #1836): every issue form must be registered exactly once, and the
+registry must agree with the form it points at.
+
 Usage:
     python3 scripts/issue_template_lint.py [--check]
+    python3 scripts/issue_template_lint.py --registry-only
 """
 
 import os
 import sys
 import glob
+import argparse
 
 try:
     import yaml
@@ -22,9 +28,11 @@ except ImportError:
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 TEMPLATE_DIR = os.path.join(REPO_ROOT, ".github", "ISSUE_TEMPLATE")
+REGISTRY_PATH = os.path.join(REPO_ROOT, ".github", "issue-types.yml")
 
 REQUIRED_FORM_FIELDS = {"name", "description", "body"}
 ALLOWED_INPUT_TYPES = {"markdown", "input", "textarea", "checkboxes", "dropdown"}
+REQUIRED_TYPE_FIELDS = {"id", "name", "description", "template"}
 
 
 def lint_yaml_file(filepath):
@@ -117,7 +125,172 @@ def validate_config_yml(filepath, data):
     return errors
 
 
+def validate_registry(registry_data, template_data):
+    """Validates the first-class issue type registry against the issue forms.
+
+    `registry_data` is the parsed `.github/issue-types.yml` mapping and
+    `template_data` maps a template file name to its parsed form.
+    """
+    errors = []
+    rel_registry = os.path.relpath(REGISTRY_PATH, REPO_ROOT)
+
+    if not isinstance(registry_data, dict):
+        errors.append(f"{rel_registry}: Root content must be a YAML dictionary")
+        return errors
+
+    types = registry_data.get("types")
+    if not isinstance(types, list) or not types:
+        errors.append(f"{rel_registry}: 'types' must be a non-empty list")
+        return errors
+
+    seen_ids = set()
+    seen_titles = {}
+    registered_templates = {}
+
+    for idx, entry in enumerate(types):
+        where = f"{rel_registry}: types[{idx}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{where}: must be a YAML dictionary")
+            continue
+
+        missing = REQUIRED_TYPE_FIELDS - set(entry.keys())
+        if missing:
+            errors.append(f"{where}: Missing required fields: {', '.join(sorted(missing))}")
+
+        type_id = entry.get("id")
+        if not isinstance(type_id, str) or not type_id.strip():
+            errors.append(f"{where}: 'id' must be a non-empty string")
+        else:
+            type_id = type_id.strip()
+            if type_id in seen_ids:
+                errors.append(f"{where}: duplicate issue type id '{type_id}'")
+            seen_ids.add(type_id)
+
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            errors.append(f"{where}: 'name' must be a non-empty string")
+
+        description = entry.get("description")
+        if not isinstance(description, str) or not description.strip():
+            errors.append(f"{where}: 'description' must be a non-empty string")
+
+        template = entry.get("template")
+        if not isinstance(template, str) or not template.strip():
+            errors.append(f"{where}: 'template' must be a non-empty string")
+            continue
+        template = template.strip()
+
+        if template in registered_templates:
+            errors.append(
+                f"{where}: template '{template}' is already registered by type "
+                f"'{registered_templates[template]}'"
+            )
+        registered_templates[template] = type_id
+
+        title = entry.get("title")
+        if title is not None and (not isinstance(title, str) or not title.strip()):
+            errors.append(f"{where}: 'title' must be a non-empty string when present")
+
+        labels = entry.get("labels", [])
+        if not isinstance(labels, list) or any(not isinstance(l, str) for l in labels):
+            errors.append(f"{where}: 'labels' must be a list of strings")
+            labels = []
+
+        if template not in template_data:
+            errors.append(
+                f"{where}: template '{template}' not found in "
+                f"{os.path.relpath(TEMPLATE_DIR, REPO_ROOT)}/"
+            )
+            continue
+
+        form = template_data[template]
+
+        form_labels = form.get("labels") or []
+        if not isinstance(form_labels, list):
+            form_labels = []
+        for label in form_labels:
+            if label not in labels:
+                errors.append(
+                    f"{where}: form '{template}' applies label '{label}' which is not "
+                    f"declared in the registry"
+                )
+        for label in labels:
+            if label not in form_labels:
+                errors.append(
+                    f"{where}: registry declares label '{label}' which form "
+                    f"'{template}' does not apply"
+                )
+
+        form_title = form.get("title")
+        if form_title and title and form_title != title:
+            errors.append(
+                f"{where}: registry title prefix {title!r} does not match form "
+                f"'{template}' title prefix {form_title!r}"
+            )
+        if title and title in seen_titles:
+            errors.append(
+                f"{where}: title prefix {title!r} is already used by type "
+                f"'{seen_titles[title]}'"
+            )
+        elif title:
+            seen_titles[title] = type_id
+
+    for template in sorted(template_data):
+        if template == "config.yml":
+            continue
+        if template not in registered_templates:
+            errors.append(
+                f"{rel_registry}: issue form '{template}' is not registered as a "
+                f"first-class issue type"
+            )
+
+    return errors
+
+
+def load_registry():
+    """Load and parse the first-class issue type registry."""
+    rel_registry = os.path.relpath(REGISTRY_PATH, REPO_ROOT)
+    if yaml is None:
+        return None, [f"PyYAML is required to validate the issue type registry: pip install pyyaml"]
+    if not os.path.exists(REGISTRY_PATH):
+        return None, [f"Issue type registry not found: {rel_registry}"]
+    try:
+        with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except Exception as e:
+        return None, [f"{rel_registry}: Failed to parse YAML: {e}"]
+    return data, []
+
+
+def collect_template_data(template_files):
+    """Parse every issue form into a {file name: parsed form} mapping."""
+    data = {}
+    for filepath in template_files:
+        filename = os.path.basename(filepath)
+        if filename == "config.yml":
+            continue
+        is_valid, parsed, _ = lint_yaml_file(filepath)
+        if is_valid and isinstance(parsed, dict):
+            data[filename] = parsed
+    return data
+
+
 def main():
+    parser = argparse.ArgumentParser(
+        description="Lint GitHub issue forms and the first-class issue type registry."
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="report problems without changing anything (default behaviour)",
+    )
+    parser.add_argument(
+        "--registry-only",
+        action="store_true",
+        help="validate only the first-class issue type registry",
+    )
+    args = parser.parse_args()
+
     if not os.path.exists(TEMPLATE_DIR):
         print(f"ERROR: Issue template directory does not exist: {TEMPLATE_DIR}", file=sys.stderr)
         sys.exit(1)
@@ -131,35 +304,54 @@ def main():
     all_errors = []
     passed_count = 0
 
-    print("=== GitHub Issue Template & Metadata Lint ===")
-    for filepath in template_files:
-        rel_path = os.path.relpath(filepath, REPO_ROOT)
-        filename = os.path.basename(filepath)
+    if not args.registry_only:
+        print("=== GitHub Issue Template & Metadata Lint ===")
+        for filepath in template_files:
+            rel_path = os.path.relpath(filepath, REPO_ROOT)
+            filename = os.path.basename(filepath)
 
-        is_valid, data, parse_err = lint_yaml_file(filepath)
-        if not is_valid:
-            all_errors.append(f"{rel_path}: Failed to parse YAML: {parse_err}")
-            continue
+            is_valid, data, parse_err = lint_yaml_file(filepath)
+            if not is_valid:
+                all_errors.append(f"{rel_path}: Failed to parse YAML: {parse_err}")
+                continue
 
-        if filename == "config.yml":
-            file_errors = validate_config_yml(filepath, data)
-        else:
-            file_errors = validate_issue_form(filepath, data)
+            if filename == "config.yml":
+                file_errors = validate_config_yml(filepath, data)
+            else:
+                file_errors = validate_issue_form(filepath, data)
 
-        if file_errors:
-            all_errors.extend(file_errors)
+            if file_errors:
+                all_errors.extend(file_errors)
+            else:
+                passed_count += 1
+                print(f"  ✓ {rel_path} passed metadata linting")
+
+        print()
+
+    print("=== First-Class Issue Type Registry Lint ===")
+    registry_data, registry_errors = load_registry()
+    if registry_errors:
+        all_errors.extend(registry_errors)
+    else:
+        template_data = collect_template_data(template_files)
+        registry_issues = validate_registry(registry_data, template_data)
+        if registry_issues:
+            all_errors.extend(registry_issues)
         else:
             passed_count += 1
-            print(f"  ✓ {rel_path} passed metadata linting")
-
+            print(
+                f"  ✓ {os.path.relpath(REGISTRY_PATH, REPO_ROOT)}: "
+                f"{len(registry_data.get('types', []))} first-class issue type(s) validated"
+            )
     print()
+
     if all_errors:
         print(f"FAILED: {len(all_errors)} issue template linting error(s) found:")
         for err in all_errors:
             print(f"  ✗ {err}")
         sys.exit(1)
 
-    print(f"SUMMARY: All {passed_count}/{len(template_files)} issue template files passed linting and metadata consistency checks.")
+    print(f"SUMMARY: All {passed_count} issue template check(s) passed linting and metadata consistency checks.")
     sys.exit(0)
 
 
