@@ -74,6 +74,8 @@
 
 Designed for high availability, type safety, and minimal footprint.
 
+Want the problem statement, users, and journeys in one place? See the **[PITCH storyboards](docs/pitch-storyboards.md)** (implemented vs proposed capabilities are labeled there).
+
 ---
 
 ## ✨ Key Features
@@ -759,6 +761,9 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and releases.
 
 <!-- handsoff-issue-1676 -->
 - #1676: [EPIC] CONTRIBUTING docs — linked from the Contributing section above.
+
+<!-- handsoff-issue-1764 -->
+- #1764: [EPIC] PITCH storyboards — product storyboards in `docs/pitch-storyboards.md` (Mermaid + tables); linked from the README intro and Contributing section.
 
 <!-- handsoff-issue-1677 -->
 - #1677: [EPIC] PITCH storyboards — linked from the Contributing section above (`docs/PITCH.md`).
